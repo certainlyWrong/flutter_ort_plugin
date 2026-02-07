@@ -218,10 +218,10 @@ The example app demonstrates basic runtime initialization and displays the initi
 
 - [x] Runtime and environment initialization
 - [x] Inference session creation
-- [ ] Input/output tensor support
-- [ ] Inference execution
-- [ ] Execution provider support (CUDA, ROCm, CoreML)
-- [ ] Higher-level user-friendly APIs (without FFI pointers)
+- [x] Input/output tensor support
+- [x] Inference execution
+- [x] Execution provider support (CUDA, ROCm, CoreML)
+- [x] Higher-level user-friendly APIs (without FFI pointers)
 - [ ] Unit and integration tests
 
 ## 🤝 Contributing
