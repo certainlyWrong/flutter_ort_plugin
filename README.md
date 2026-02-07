@@ -11,8 +11,11 @@ A Flutter FFI (Foreign Function Interface) plugin for running ONNX (Open Neural 
 - **ONNX Model Execution**: Load and execute ONNX models (.onnx) directly in Flutter
 - **Multiplatform Support**: Android, iOS, macOS, Linux, and Windows
 - **Native FFI API**: Direct integration with the ONNX Runtime C API via Dart FFI
+- **High-Level APIs**: User-friendly `OrtSessionWrapper` and `OrtValueWrapper` classes without FFI pointers
+- **Execution Providers**: Support for CUDA, TensorRT, ROCm, CoreML, OpenVINO, QNN, XNNPACK, and oneDNN
 - **Auto-generated Bindings**: Uses `ffigen` to generate Dart bindings from C headers
-- **Resource Management**: High-level API for managing sessions, environments, and tensors
+- **Resource Management**: Automatic lifecycle management for sessions, tensors, and environments
+- **Typed Tensor Creation**: Easy creation of Float32 and Int64 tensors with `OrtTensor` and `OrtValueWrapper`
 
 ## 📋 Requirements
 
@@ -59,7 +62,85 @@ runtime.createEnvironment(
 );
 ```
 
-### Loading a Model
+### High-Level API (Recommended)
+
+The plugin provides high-level wrapper classes that hide FFI pointers and manage resources automatically:
+
+#### OrtSessionWrapper - Complete Model Loading & Inference
+
+```dart
+// Load a model with optional provider configuration
+final session = OrtSessionWrapper.create(
+  'path/to/model.onnx',
+  configureProviders: (providers, options) {
+    // Optional: Add execution providers
+    // providers.appendCuda(options, deviceId: 0);
+    // providers.appendCoreML(options);
+  },
+);
+
+// Get model metadata
+print('Inputs: ${session.inputNames}');  // Auto-discovered
+print('Outputs: ${session.outputNames}');
+
+// Create input tensors (no FFI pointers!)
+final inputData = Float32List.fromList([1.0, 2.0, 3.0]);
+final inputTensor = OrtValueWrapper.fromFloat(
+  runtime,
+  [1, 3],  // shape: [batch=1, features=3]
+  inputData,
+);
+
+// Run inference and get outputs as Dart lists
+final outputs = session.runFloat(
+  {'input_name': inputTensor},
+  [10],  // output element counts
+);
+
+// outputs is List<Float32List> - pure Dart types!
+final predictions = outputs.first;
+print('Predicted class: ${predictions.indexOf(predictions.reduce(max))}');
+
+// Cleanup
+inputTensor.release();
+session.dispose();
+```
+
+#### Execution Providers (GPU Acceleration)
+
+```dart
+final providers = OrtProviders(runtime);
+
+// CUDA (NVIDIA GPU)
+providers.appendCuda(options, deviceId: 0);
+
+// CoreML (Apple Neural Engine / GPU)
+providers.appendCoreML(options, providerOptions: {
+  'MLComputeUnits': 'All',
+});
+
+// OpenVINO (Intel hardware)
+providers.appendOpenVINO(options, providerOptions: {
+  'device_type': 'CPU',
+});
+
+// ROCm (AMD GPU)
+providers.appendROCm(options, deviceId: 0);
+
+// TensorRT (NVIDIA optimized)
+providers.appendTensorRT(options, deviceId: 0);
+
+// Generic provider (any registered provider)
+providers.appendExecutionProvider(
+  options,
+  'QNN',  // Qualcomm AI Engine
+  providerOptions: {'backend_path': '/path/to/libQnnCpu.so'},
+);
+```
+
+### Low-Level API (Direct FFI)
+
+For advanced use cases requiring direct FFI control:
 
 ```dart
 // Create session options
@@ -67,9 +148,39 @@ final sessionOptions = runtime.createSessionOptions();
 
 // Load ONNX model
 final session = runtime.createSession(
-  'assets/model.onnx',  // Path to the .onnx file
+  'assets/model.onnx',
   sessionOptions,
 );
+
+// Get input/output names
+final inputNames = runtime.getSessionInputNames(session);
+final outputNames = runtime.getSessionOutputNames(session);
+
+// Create tensors using OrtTensor helper
+final tensor = OrtTensor(runtime);
+final inputValue = tensor.createFloat([1, 3], inputData);
+
+// Run inference
+final outputs = runtime.run(
+  session,
+  inputNames: inputNames,
+  inputValues: [inputValue],
+  outputNames: outputNames,
+);
+
+// Read output data
+final outputData = tensor.getDataFloat(outputs.first, 10);
+
+// Cleanup
+for (final output in outputs) {
+  tensor.release(output);
+}
+tensor.release(inputValue);
+for (final opt in outputs) {
+  runtime.releaseValue(opt);  // alternative
+}
+runtime.releaseSession(session);
+runtime.releaseSessionOptions(sessionOptions);
 ```
 
 ### Resource Cleanup
@@ -88,7 +199,11 @@ runtime.dispose();
 ```
 flutter_ort_plugin/
 ├── lib/
-│   ├── onnx_runtinme.dart          # High-level API (OnnxRuntime)
+│   ├── onnx_runtinme.dart          # Core runtime API (OnnxRuntime)
+│   ├── ort_tensor.dart             # Low-level tensor operations (OrtTensor)
+│   ├── ort_providers.dart          # Execution provider configuration (OrtProviders)
+│   ├── ort_session_wrapper.dart    # High-level session wrapper (OrtSessionWrapper)
+│   ├── ort_value_wrapper.dart      # High-level tensor wrapper (OrtValueWrapper)
 │   ├── flutter_ort_plugin.dart     # Plugin exports
 │   └── bindings/
 │       └── onnxruntime_generated.dart  # Generated FFI bindings
@@ -98,7 +213,7 @@ flutter_ort_plugin/
 ├── ios/                            # iOS CocoaPods configuration
 ├── macos/                          # macOS configuration
 ├── windows/                        # Windows configuration
-└── example/                        # Example application
+└── example/                        # Example MNIST application
 ```
 
 ### Data Flow
@@ -144,27 +259,80 @@ Libraries are linked via CocoaPods in the `.podspec` files.
 
 ## 📝 API Reference
 
-### `OnnxRuntime` Class
+### High-Level APIs (Recommended)
 
-#### Methods
+#### `OrtSessionWrapper` Class
 
-| Method                                                                | Description                                           |
-| --------------------------------------------------------------------- | ----------------------------------------------------- |
-| `initialize({String? libraryPath})`                                   | Initializes the runtime by loading the native library |
-| `createEnvironment({int logLevel, String logId})`                     | Creates the ONNX Runtime environment                  |
-| `createSessionOptions()`                                              | Creates configuration options for sessions            |
-| `createSession(String modelPath, Pointer<OrtSessionOptions> options)` | Creates a session from a model                        |
-| `releaseSession(Pointer<OrtSession> session)`                         | Releases session resources                            |
-| `releaseSessionOptions(Pointer<OrtSessionOptions> options)`           | Releases options resources                            |
-| `dispose()`                                                           | Cleans up all allocated resources                     |
+A high-level wrapper for ONNX sessions that handles resource management automatically.
 
-#### Properties
+| Method                                                                                               | Description                                                         |
+| ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `OrtSessionWrapper.create(String modelPath, {OnnxRuntime? runtime, Function? configureProviders})`   | Factory constructor that loads a model and discovers inputs/outputs |
+| `run(Map<String, OrtValueWrapper> inputs)` → `List<OrtValueWrapper>`                                 | Run inference with wrapped tensors                                  |
+| `runFloat(Map<String, OrtValueWrapper> inputs, List<int> outputElementCounts)` → `List<Float32List>` | Run inference and get outputs as Dart lists directly                |
+| `dispose()`                                                                                          | Release session resources                                           |
+| `inputNames` → `List<String>`                                                                        | Auto-discovered input tensor names                                  |
+| `outputNames` → `List<String>`                                                                       | Auto-discovered output tensor names                                 |
+| `inputCount` → `int`                                                                                 | Number of input tensors                                             |
+| `outputCount` → `int`                                                                                | Number of output tensors                                            |
 
-| Property        | Type               | Description                                   |
-| --------------- | ------------------ | --------------------------------------------- |
-| `isInitialized` | `bool`             | Indicates if the runtime has been initialized |
-| `api`           | `Pointer<OrtApi>`  | Direct access to the ONNX Runtime API         |
-| `environment`   | `Pointer<OrtEnv>?` | Pointer to the ONNX Runtime environment       |
+#### `OrtValueWrapper` Class
+
+A high-level wrapper for ONNX tensor values that hides FFI pointers.
+
+| Method                                                                      | Description                                 |
+| --------------------------------------------------------------------------- | ------------------------------------------- |
+| `OrtValueWrapper.fromFloat(OnnxRuntime, List<int> shape, Float32List data)` | Create a float32 tensor from shape and data |
+| `OrtValueWrapper.fromInt64(OnnxRuntime, List<int> shape, List<int> data)`   | Create an int64 tensor from shape and data  |
+| `toFloatList(int elementCount)` → `Float32List`                             | Read tensor data as Dart Float32List        |
+| `release()`                                                                 | Release native tensor memory                |
+| `isReleased` → `bool`                                                       | Check if already released                   |
+
+#### `OrtProviders` Class
+
+Configure execution providers for GPU/hardware acceleration.
+
+| Method                                                                                    | Description                            |
+| ----------------------------------------------------------------------------------------- | -------------------------------------- |
+| `appendCuda(Pointer<OrtSessionOptions>, {int deviceId = 0})`                              | Add NVIDIA CUDA provider               |
+| `appendTensorRT(Pointer<OrtSessionOptions>, {int deviceId = 0})`                          | Add NVIDIA TensorRT provider           |
+| `appendROCm(Pointer<OrtSessionOptions>, {int deviceId = 0})`                              | Add AMD ROCm provider                  |
+| `appendCoreML(Pointer<OrtSessionOptions>, {Map providerOptions})`                         | Add Apple CoreML provider              |
+| `appendOpenVINO(Pointer<OrtSessionOptions>, {Map providerOptions})`                       | Add Intel OpenVINO provider            |
+| `appendQnn(Pointer<OrtSessionOptions>, {Map providerOptions})`                            | Add Qualcomm QNN provider              |
+| `appendXnnpack(Pointer<OrtSessionOptions>, {Map providerOptions})`                        | Add XNNPACK provider                   |
+| `appendDnnl(Pointer<OrtSessionOptions>, {int useArena = 1})`                              | Add oneDNN provider                    |
+| `appendExecutionProvider(Pointer<OrtSessionOptions>, String name, {Map providerOptions})` | Generic provider (any registered name) |
+
+### Low-Level APIs
+
+#### `OnnxRuntime` Class
+
+Core runtime class for direct FFI access.
+
+| Method                                                                                        | Description                                           |
+| --------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `initialize({String? libraryPath})`                                                           | Initializes the runtime by loading the native library |
+| `createEnvironment({int logLevel, String logId})`                                             | Creates the ONNX Runtime environment                  |
+| `createSessionOptions()` → `Pointer<OrtSessionOptions>`                                       | Creates configuration options for sessions            |
+| `createSession(String modelPath, Pointer<OrtSessionOptions> options)` → `Pointer<OrtSession>` | Creates a session from a model                        |
+| `getSessionInputNames(Pointer<OrtSession>)` → `List<String>`                                  | Get input tensor names                                |
+| `getSessionOutputNames(Pointer<OrtSession>)` → `List<String>`                                 | Get output tensor names                               |
+| `run(Pointer<OrtSession>, {...})` → `List<Pointer<OrtValue>>`                                 | Run inference with FFI pointers                       |
+| `releaseSession(Pointer<OrtSession>)`                                                         | Releases session resources                            |
+| `releaseSessionOptions(Pointer<OrtSessionOptions>)`                                           | Releases options resources                            |
+| `dispose()`                                                                                   | Cleans up all allocated resources                     |
+
+#### `OrtTensor` Class
+
+Low-level tensor helper that works with FFI pointers.
+
+| Method                                                                 | Description            |
+| ---------------------------------------------------------------------- | ---------------------- |
+| `createFloat(List<int> shape, Float32List data)` → `Pointer<OrtValue>` | Create float32 tensor  |
+| `createInt64(List<int> shape, List<int> data)` → `Pointer<OrtValue>`   | Create int64 tensor    |
+| `getDataFloat(Pointer<OrtValue>, int elementCount)` → `Float32List`    | Read float tensor data |
+| `release(Pointer<OrtValue>)`                                           | Release tensor memory  |
 
 ### Tensor Data Types
 
@@ -207,21 +375,37 @@ headers:
 
 ## 🧪 Running the Example
 
+The example app demonstrates a complete MNIST digit recognition workflow:
+
+1. **Model Loading**: Loads MNIST model from assets using high-level `OrtSessionWrapper`
+2. **Provider Configuration**: Shows how to configure execution providers (commented out by default)
+3. **Tensor Creation**: Creates synthetic input using `OrtValueWrapper.fromFloat()`
+4. **Inference**: Runs inference with `session.runFloat()` returning pure Dart types
+5. **Results**: Displays predicted digit and inference time
+
 ```bash
 cd example
+flutter pub get
 flutter run
 ```
 
-The example app demonstrates basic runtime initialization and displays the initialization status.
+### Example Output
+
+The app shows:
+
+- **Status**: Initialization state
+- **Model Info**: Auto-discovered inputs/outputs (1 input, 1 output for MNIST)
+- **Inference Button**: Runs inference on a synthetic "3" digit pattern
+- **Prediction Result**: Shows the predicted digit (0-9) and inference time in milliseconds
 
 ## 🛣️ Roadmap
 
 - [x] Runtime and environment initialization
 - [x] Inference session creation
-- [ ] Input/output tensor support
-- [ ] Inference execution
-- [ ] Execution provider support (CUDA, ROCm, CoreML)
-- [ ] Higher-level user-friendly APIs (without FFI pointers)
+- [x] Input/output tensor support
+- [x] Inference execution
+- [x] Execution provider support (CUDA, ROCm, CoreML)
+- [x] Higher-level user-friendly APIs (without FFI pointers)
 - [ ] Unit and integration tests
 
 ## 🤝 Contributing
