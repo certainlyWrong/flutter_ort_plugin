@@ -168,6 +168,225 @@ class OnnxRuntime {
     );
   }
 
+  void ensureInitialized() {
+    if (!_initialized) {
+      throw StateError('OnnxRuntime not initialized. Call initialize() first.');
+    }
+  }
+
+  Pointer<OrtAllocator> getDefaultAllocator() {
+    ensureInitialized();
+    final allocatorPtr = calloc<Pointer<OrtAllocator>>();
+    try {
+      final status = _api.ref.GetAllocatorWithDefaultOptions
+          .asFunction<
+            Pointer<OrtStatus> Function(Pointer<Pointer<OrtAllocator>>)
+          >()(allocatorPtr);
+      _checkStatus(status);
+      return allocatorPtr.value;
+    } finally {
+      calloc.free(allocatorPtr);
+    }
+  }
+
+  int getSessionInputCount(Pointer<OrtSession> session) {
+    ensureInitialized();
+    final countPtr = calloc<Size>();
+    try {
+      final status = _api.ref.SessionGetInputCount
+          .asFunction<
+            Pointer<OrtStatus> Function(Pointer<OrtSession>, Pointer<Size>)
+          >()(session, countPtr);
+      _checkStatus(status);
+      return countPtr.value;
+    } finally {
+      calloc.free(countPtr);
+    }
+  }
+
+  int getSessionOutputCount(Pointer<OrtSession> session) {
+    ensureInitialized();
+    final countPtr = calloc<Size>();
+    try {
+      final status = _api.ref.SessionGetOutputCount
+          .asFunction<
+            Pointer<OrtStatus> Function(Pointer<OrtSession>, Pointer<Size>)
+          >()(session, countPtr);
+      _checkStatus(status);
+      return countPtr.value;
+    } finally {
+      calloc.free(countPtr);
+    }
+  }
+
+  String getSessionInputName(Pointer<OrtSession> session, int index) {
+    ensureInitialized();
+    final allocator = getDefaultAllocator();
+    final namePtr = calloc<Pointer<Char>>();
+    try {
+      final status = _api.ref.SessionGetInputName
+          .asFunction<
+            Pointer<OrtStatus> Function(
+              Pointer<OrtSession>,
+              int,
+              Pointer<OrtAllocator>,
+              Pointer<Pointer<Char>>,
+            )
+          >()(session, index, allocator, namePtr);
+      _checkStatus(status);
+      final name = namePtr.value.cast<Utf8>().toDartString();
+      _api.ref.AllocatorFree
+          .asFunction<
+            Pointer<OrtStatus> Function(Pointer<OrtAllocator>, Pointer<Void>)
+          >()(allocator, namePtr.value.cast());
+      return name;
+    } finally {
+      calloc.free(namePtr);
+    }
+  }
+
+  String getSessionOutputName(Pointer<OrtSession> session, int index) {
+    ensureInitialized();
+    final allocator = getDefaultAllocator();
+    final namePtr = calloc<Pointer<Char>>();
+    try {
+      final status = _api.ref.SessionGetOutputName
+          .asFunction<
+            Pointer<OrtStatus> Function(
+              Pointer<OrtSession>,
+              int,
+              Pointer<OrtAllocator>,
+              Pointer<Pointer<Char>>,
+            )
+          >()(session, index, allocator, namePtr);
+      _checkStatus(status);
+      final name = namePtr.value.cast<Utf8>().toDartString();
+      _api.ref.AllocatorFree
+          .asFunction<
+            Pointer<OrtStatus> Function(Pointer<OrtAllocator>, Pointer<Void>)
+          >()(allocator, namePtr.value.cast());
+      return name;
+    } finally {
+      calloc.free(namePtr);
+    }
+  }
+
+  List<String> getSessionInputNames(Pointer<OrtSession> session) {
+    final count = getSessionInputCount(session);
+    return List.generate(count, (i) => getSessionInputName(session, i));
+  }
+
+  List<String> getSessionOutputNames(Pointer<OrtSession> session) {
+    final count = getSessionOutputCount(session);
+    return List.generate(count, (i) => getSessionOutputName(session, i));
+  }
+
+  Pointer<OrtRunOptions> createRunOptions() {
+    ensureInitialized();
+    final runOptionsPtr = calloc<Pointer<OrtRunOptions>>();
+    try {
+      final status = _api.ref.CreateRunOptions
+          .asFunction<
+            Pointer<OrtStatus> Function(Pointer<Pointer<OrtRunOptions>>)
+          >()(runOptionsPtr);
+      _checkStatus(status);
+      return runOptionsPtr.value;
+    } finally {
+      calloc.free(runOptionsPtr);
+    }
+  }
+
+  void releaseRunOptions(Pointer<OrtRunOptions> runOptions) {
+    if (!_initialized || runOptions == nullptr) return;
+    _api.ref.ReleaseRunOptions
+        .asFunction<void Function(Pointer<OrtRunOptions>)>()(runOptions);
+  }
+
+  List<Pointer<OrtValue>> run(
+    Pointer<OrtSession> session, {
+    required List<String> inputNames,
+    required List<Pointer<OrtValue>> inputValues,
+    required List<String> outputNames,
+    Pointer<OrtRunOptions>? runOptions,
+  }) {
+    ensureInitialized();
+
+    final createdRunOptions = runOptions == null;
+    final actualRunOptions = runOptions ?? createRunOptions();
+
+    final inputNamesPtr = calloc<Pointer<Char>>(inputNames.length);
+    final inputValuesPtr = calloc<Pointer<OrtValue>>(inputValues.length);
+    final outputNamesPtr = calloc<Pointer<Char>>(outputNames.length);
+    final outputValuesPtr = calloc<Pointer<OrtValue>>(outputNames.length);
+
+    final nativeInputNames = <Pointer<Utf8>>[];
+    final nativeOutputNames = <Pointer<Utf8>>[];
+
+    try {
+      for (var i = 0; i < inputNames.length; i++) {
+        final nativeName = inputNames[i].toNativeUtf8();
+        nativeInputNames.add(nativeName);
+        inputNamesPtr[i] = nativeName.cast();
+      }
+      for (var i = 0; i < inputValues.length; i++) {
+        inputValuesPtr[i] = inputValues[i];
+      }
+      for (var i = 0; i < outputNames.length; i++) {
+        final nativeName = outputNames[i].toNativeUtf8();
+        nativeOutputNames.add(nativeName);
+        outputNamesPtr[i] = nativeName.cast();
+      }
+      for (var i = 0; i < outputNames.length; i++) {
+        outputValuesPtr[i] = nullptr;
+      }
+
+      final status =
+          _api.ref.Run
+              .asFunction<
+                Pointer<OrtStatus> Function(
+                  Pointer<OrtSession>,
+                  Pointer<OrtRunOptions>,
+                  Pointer<Pointer<Char>>,
+                  Pointer<Pointer<OrtValue>>,
+                  int,
+                  Pointer<Pointer<Char>>,
+                  int,
+                  Pointer<Pointer<OrtValue>>,
+                )
+              >()(
+            session,
+            actualRunOptions,
+            inputNamesPtr,
+            inputValuesPtr,
+            inputNames.length,
+            outputNamesPtr,
+            outputNames.length,
+            outputValuesPtr,
+          );
+      _checkStatus(status);
+
+      final results = <Pointer<OrtValue>>[];
+      for (var i = 0; i < outputNames.length; i++) {
+        results.add(outputValuesPtr[i]);
+      }
+      return results;
+    } finally {
+      for (final name in nativeInputNames) {
+        calloc.free(name);
+      }
+      for (final name in nativeOutputNames) {
+        calloc.free(name);
+      }
+      calloc.free(inputNamesPtr);
+      calloc.free(inputValuesPtr);
+      calloc.free(outputNamesPtr);
+      calloc.free(outputValuesPtr);
+      if (createdRunOptions) {
+        releaseRunOptions(actualRunOptions);
+      }
+    }
+  }
+
   void _checkStatus(Pointer<OrtStatus> status) {
     if (status == nullptr) {
       return;
