@@ -9,8 +9,13 @@ output: 'lib/bindings/onnxruntime_generated.dart'
 headers:
   entry-points:
     - 'include/onnxruntime/core/session/onnxruntime_c_api.h'
+    - 'include/onnxruntime/core/providers/nnapi/nnapi_provider_factory.h'
   include-directives:
     - 'include/onnxruntime/core/session/onnxruntime_c_api.h'
+    - 'include/onnxruntime/core/providers/nnapi/nnapi_provider_factory.h'
+
+compiler-opts:
+  - '-Iinclude/onnxruntime/core/session'
 
 llvm-path:
   # No Mac (com brew): '/opt/homebrew/opt/llvm'
@@ -40,6 +45,7 @@ silence-enum-warning: true
 enums:
   include:
     - 'Ort.*'
+    - 'NNAPIFlags'
 
 unions:
   include:

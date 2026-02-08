@@ -9,6 +9,7 @@ import 'onnx_runtinme.dart';
 enum OrtProvider {
   cpu('CPUExecutionProvider'),
   coreML('CoreMLExecutionProvider'),
+  nnapi('NnapiExecutionProvider'),
   cuda('CUDAExecutionProvider'),
   tensorRT('TensorrtExecutionProvider'),
   rocm('ROCMExecutionProvider'),
@@ -34,8 +35,8 @@ class OrtProviders {
     final lengthPtr = calloc<Int>();
 
     try {
-      final status = api.GetAvailableProviders
-          .asFunction<
+      final status =
+          api.GetAvailableProviders.asFunction<
             Pointer<OrtStatus> Function(
               Pointer<Pointer<Pointer<Char>>>,
               Pointer<Int>,
@@ -51,10 +52,9 @@ class OrtProviders {
         providers.add(arrayPtr[i].cast<Utf8>().toDartString());
       }
 
-      api.ReleaseAvailableProviders
-          .asFunction<
-            Pointer<OrtStatus> Function(Pointer<Pointer<Char>>, int)
-          >()(arrayPtr, length);
+      api.ReleaseAvailableProviders.asFunction<
+        Pointer<OrtStatus> Function(Pointer<Pointer<Char>>, int)
+      >()(arrayPtr, length);
 
       return providers;
     } finally {
@@ -81,6 +81,10 @@ class OrtProviders {
 
     if (Platform.isAndroid) {
       final providers = <OrtProvider>[];
+      if (available.contains('NnapiExecutionProvider') ||
+          available.contains('NNAPIExecutionProvider')) {
+        providers.add(OrtProvider.nnapi);
+      }
       if (available.contains(OrtProvider.xnnpack.ortName)) {
         providers.add(OrtProvider.xnnpack);
       }
@@ -124,29 +128,39 @@ class OrtProviders {
       case OrtProvider.cpu:
         break;
       case OrtProvider.coreML:
-        _appendViaGenericApi(options, 'CoreML',
-            providerOptions: providerOptions);
+        _appendViaGenericApi(
+          options,
+          'CoreML',
+          providerOptions: providerOptions,
+        );
+      case OrtProvider.nnapi:
+        _appendNnapi(options, providerOptions: providerOptions);
       case OrtProvider.cuda:
-        _appendViaGenericApi(options, 'CUDA',
-            providerOptions: providerOptions);
+        _appendViaGenericApi(options, 'CUDA', providerOptions: providerOptions);
       case OrtProvider.tensorRT:
-        _appendViaGenericApi(options, 'TensorRT',
-            providerOptions: providerOptions);
+        _appendViaGenericApi(
+          options,
+          'TensorRT',
+          providerOptions: providerOptions,
+        );
       case OrtProvider.rocm:
-        _appendViaGenericApi(options, 'ROCM',
-            providerOptions: providerOptions);
+        _appendViaGenericApi(options, 'ROCM', providerOptions: providerOptions);
       case OrtProvider.openVINO:
-        _appendViaGenericApi(options, 'OpenVINO',
-            providerOptions: providerOptions);
+        _appendViaGenericApi(
+          options,
+          'OpenVINO',
+          providerOptions: providerOptions,
+        );
       case OrtProvider.dnnl:
-        _appendViaGenericApi(options, 'DNNL',
-            providerOptions: providerOptions);
+        _appendViaGenericApi(options, 'DNNL', providerOptions: providerOptions);
       case OrtProvider.qnn:
-        _appendViaGenericApi(options, 'QNN',
-            providerOptions: providerOptions);
+        _appendViaGenericApi(options, 'QNN', providerOptions: providerOptions);
       case OrtProvider.xnnpack:
-        _appendViaGenericApi(options, 'XNNPACK',
-            providerOptions: providerOptions);
+        _appendViaGenericApi(
+          options,
+          'XNNPACK',
+          providerOptions: providerOptions,
+        );
     }
   }
 
@@ -194,8 +208,11 @@ class OrtProviders {
     String providerName, {
     Map<String, String> providerOptions = const {},
   }) {
-    _appendViaGenericApi(options, providerName,
-        providerOptions: providerOptions);
+    _appendViaGenericApi(
+      options,
+      providerName,
+      providerOptions: providerOptions,
+    );
   }
 
   void _appendViaGenericApi(
@@ -227,8 +244,8 @@ class OrtProviders {
         valuesPtr[i] = nv.cast();
       }
 
-      final status = api.SessionOptionsAppendExecutionProvider
-          .asFunction<
+      final status =
+          api.SessionOptionsAppendExecutionProvider.asFunction<
             Pointer<OrtStatus> Function(
               Pointer<OrtSessionOptions>,
               Pointer<Char>,
@@ -251,16 +268,50 @@ class OrtProviders {
     }
   }
 
+  void _appendNnapi(
+    Pointer<OrtSessionOptions> options, {
+    Map<String, String> providerOptions = const {},
+  }) {
+    _runtime.ensureInitialized();
+
+    var nnapiFlags = 0;
+
+    if (providerOptions['use_fp16']?.toLowerCase() == 'true') {
+      nnapiFlags |= NNAPIFlags.NNAPI_FLAG_USE_FP16.value;
+    }
+    if (providerOptions['use_nchw']?.toLowerCase() == 'true') {
+      nnapiFlags |= NNAPIFlags.NNAPI_FLAG_USE_NCHW.value;
+    }
+    if (providerOptions['cpu_disabled']?.toLowerCase() == 'true') {
+      nnapiFlags |= NNAPIFlags.NNAPI_FLAG_CPU_DISABLED.value;
+    }
+    if (providerOptions['cpu_only']?.toLowerCase() == 'true') {
+      nnapiFlags |= NNAPIFlags.NNAPI_FLAG_CPU_ONLY.value;
+    }
+
+    try {
+      final bindings = _runtime.bindings;
+      final status = bindings.OrtSessionOptionsAppendExecutionProvider_Nnapi(
+        options,
+        nnapiFlags,
+      );
+      _checkStatus(status);
+    } catch (e) {
+      _appendViaGenericApi(options, 'NNAPI', providerOptions: providerOptions);
+    }
+  }
+
   void _checkStatus(Pointer<OrtStatus> status) {
     if (status == nullptr) return;
 
     final api = _runtime.api.ref;
-    final errorMsg = api.GetErrorMessage
-        .asFunction<Pointer<Char> Function(Pointer<OrtStatus>)>()(status);
+    final errorMsg =
+        api.GetErrorMessage.asFunction<
+          Pointer<Char> Function(Pointer<OrtStatus>)
+        >()(status);
     final errorString = errorMsg.cast<Utf8>().toDartString();
 
-    api.ReleaseStatus
-        .asFunction<void Function(Pointer<OrtStatus>)>()(status);
+    api.ReleaseStatus.asFunction<void Function(Pointer<OrtStatus>)>()(status);
 
     throw Exception('OrtProviders Error: $errorString');
   }
