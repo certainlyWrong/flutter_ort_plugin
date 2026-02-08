@@ -9,6 +9,7 @@ import 'inference_page.dart';
 import 'isolate_page.dart';
 import 'providers_page.dart';
 import 'shared.dart';
+import 'yolo_camera_page.dart';
 
 void main() {
   runApp(const MyApp());
@@ -47,6 +48,7 @@ class _HomePageState extends State<HomePage> {
   String? _error;
   String _deviceInfo = '';
   String? _modelPath;
+  String? _yoloModelPath;
   List<String> _availableProviders = [];
   List<OrtProvider> _defaultProviders = [];
 
@@ -67,6 +69,7 @@ class _HomePageState extends State<HomePage> {
 
       await _collectDeviceInfo();
       _modelPath = await copyModelToTemp();
+      _yoloModelPath = await copyYoloModelToTemp();
 
       setState(() => _initialized = true);
     } catch (e, stack) {
@@ -122,75 +125,76 @@ class _HomePageState extends State<HomePage> {
       body: !_initialized && _error == null
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(child: ErrorCard(message: _error!))
-              : ListView(
-                  padding: const EdgeInsets.all(16),
+          ? Center(child: ErrorCard(message: _error!))
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                SectionCard(
+                  title: 'Runtime',
                   children: [
-                    SectionCard(
-                      title: 'Runtime',
-                      children: [
-                        InfoRow('Device', _deviceInfo),
-                        InfoRow(
-                          'Platform',
-                          Platform.operatingSystem.toUpperCase(),
-                        ),
-                        InfoRow(
-                          'Available providers',
-                          _availableProviders.join('\n'),
-                        ),
-                        InfoRow(
-                          'Default providers',
-                          _defaultProviders.map((p) => p.name).join(', '),
-                        ),
-                      ],
+                    InfoRow('Device', _deviceInfo),
+                    InfoRow('Platform', Platform.operatingSystem.toUpperCase()),
+                    InfoRow(
+                      'Available providers',
+                      _availableProviders.join('\n'),
                     ),
-                    const SizedBox(height: 24),
-                    Text(
-                      'Examples',
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium
-                          ?.copyWith(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    _NavTile(
-                      icon: Icons.play_arrow,
-                      color: Colors.blue,
-                      title: 'Basic Inference',
-                      subtitle:
-                          'Load model with auto providers, select a digit, run inference with probability bars',
-                      onTap: () =>
-                          _push(InferencePage(modelPath: _modelPath!)),
-                    ),
-                    _NavTile(
-                      icon: Icons.tune,
-                      color: Colors.teal,
-                      title: 'Execution Providers',
-                      subtitle:
-                          'Query available providers, check OrtProvider enum, create session with manual selection',
-                      onTap: () =>
-                          _push(ProvidersPage(modelPath: _modelPath!)),
-                    ),
-                    _NavTile(
-                      icon: Icons.compare_arrows,
-                      color: Colors.deepOrange,
-                      title: 'Isolate vs Sync',
-                      subtitle:
-                          'Compare sync (freezes UI) vs isolate (smooth). Watch the spinner!',
-                      onTap: () =>
-                          _push(IsolatePage(modelPath: _modelPath!)),
-                    ),
-                    _NavTile(
-                      icon: Icons.speed,
-                      color: Colors.purple,
-                      title: 'Benchmark',
-                      subtitle:
-                          'Run N inferences, see avg/median/p95/p99/stddev and histogram',
-                      onTap: () =>
-                          _push(BenchmarkPage(modelPath: _modelPath!)),
+                    InfoRow(
+                      'Default providers',
+                      _defaultProviders.map((p) => p.name).join(', '),
                     ),
                   ],
                 ),
+                const SizedBox(height: 24),
+                Text(
+                  'Examples',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                _NavTile(
+                  icon: Icons.play_arrow,
+                  color: Colors.blue,
+                  title: 'Basic Inference',
+                  subtitle:
+                      'Load model with auto providers, select a digit, run inference with probability bars',
+                  onTap: () => _push(InferencePage(modelPath: _modelPath!)),
+                ),
+                _NavTile(
+                  icon: Icons.tune,
+                  color: Colors.teal,
+                  title: 'Execution Providers',
+                  subtitle:
+                      'Query available providers, check OrtProvider enum, create session with manual selection',
+                  onTap: () => _push(ProvidersPage(modelPath: _modelPath!)),
+                ),
+                _NavTile(
+                  icon: Icons.compare_arrows,
+                  color: Colors.deepOrange,
+                  title: 'Isolate vs Sync',
+                  subtitle:
+                      'Compare sync (freezes UI) vs isolate (smooth). Watch the spinner!',
+                  onTap: () => _push(IsolatePage(modelPath: _modelPath!)),
+                ),
+                _NavTile(
+                  icon: Icons.speed,
+                  color: Colors.purple,
+                  title: 'Benchmark',
+                  subtitle:
+                      'Run N inferences, see avg/median/p95/p99/stddev and histogram',
+                  onTap: () => _push(BenchmarkPage(modelPath: _modelPath!)),
+                ),
+                _NavTile(
+                  icon: Icons.camera_alt,
+                  color: Colors.red,
+                  title: 'YOLO Real-Time',
+                  subtitle:
+                      'YOLOv11 object detection with live camera feed and bounding boxes',
+                  onTap: () =>
+                      _push(YoloCameraPage(modelPath: _yoloModelPath!)),
+                ),
+              ],
+            ),
     );
   }
 }

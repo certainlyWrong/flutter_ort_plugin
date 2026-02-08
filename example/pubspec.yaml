@@ -44,6 +44,8 @@ dependencies:
   cupertino_icons: ^1.0.8
   path_provider: ^2.1.2
   device_info_plus: ^9.1.2
+  camera: ^0.11.0+2
+  image: ^4.3.0
 
 dev_dependencies:
   flutter_test:
@@ -72,3 +74,4 @@ flutter:
    - assets/
    - assets/mnist/
    - assets/mnist/test_data_set_0/
+   - assets/yolo11.onnx

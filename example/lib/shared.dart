@@ -18,6 +18,15 @@ Future<String> copyModelToTemp() async {
   return file.path;
 }
 
+Future<String> copyYoloModelToTemp() async {
+  final dir = await getTemporaryDirectory();
+  final file = File('${dir.path}/yolo11.onnx');
+  if (await file.exists()) return file.path;
+  final bytes = await rootBundle.load('assets/yolo11.onnx');
+  await file.writeAsBytes(bytes.buffer.asUint8List());
+  return file.path;
+}
+
 // ---------------------------------------------------------------------------
 // Synthetic digit generator
 // ---------------------------------------------------------------------------
@@ -138,10 +147,9 @@ class SectionCard extends StatelessWidget {
           children: [
             Text(
               title,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleSmall
-                  ?.copyWith(color: Colors.grey[600]),
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(color: Colors.grey[600]),
             ),
             const SizedBox(height: 8),
             ...children,
@@ -170,8 +178,7 @@ class InfoRow extends StatelessWidget {
             width: 140,
             child: Text(
               label,
-              style:
-                  const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
             ),
           ),
           Expanded(
@@ -204,10 +211,9 @@ class ResultCard extends StatelessWidget {
           children: [
             Text(
               title,
-              style: Theme.of(context)
-                  .textTheme
-                  .titleSmall
-                  ?.copyWith(color: cs.onPrimaryContainer),
+              style: Theme.of(
+                context,
+              ).textTheme.titleSmall?.copyWith(color: cs.onPrimaryContainer),
             ),
             const SizedBox(height: 12),
             Row(
@@ -296,8 +302,9 @@ class ErrorCard extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         child: SelectableText(
           message,
-          style:
-              TextStyle(color: Theme.of(context).colorScheme.onErrorContainer),
+          style: TextStyle(
+            color: Theme.of(context).colorScheme.onErrorContainer,
+          ),
         ),
       ),
     );
