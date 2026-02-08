@@ -16,11 +16,23 @@ class OrtSessionWrapper {
 
   OrtSessionWrapper._(this._runtime);
 
+  /// Creates a session with **automatic** provider selection based on the
+  /// current platform. Providers are chosen via
+  /// [OrtProviders.getDefaultProvidersForPlatform].
+  ///
+  /// Use [providerOptions] to pass per-provider configuration, e.g.:
+  /// ```dart
+  /// OrtSessionWrapper.create(
+  ///   modelPath,
+  ///   providerOptions: {
+  ///     OrtProvider.coreML: {'MLComputeUnits': 'ALL'},
+  ///   },
+  /// );
+  /// ```
   static OrtSessionWrapper create(
     String modelPath, {
     OnnxRuntime? runtime,
-    void Function(OrtProviders providers, Pointer<OrtSessionOptions> options)?
-    configureProviders,
+    Map<OrtProvider, Map<String, String>> providerOptions = const {},
   }) {
     final rt = runtime ?? OnnxRuntime.instance;
     rt.ensureInitialized();
@@ -28,10 +40,73 @@ class OrtSessionWrapper {
     final wrapper = OrtSessionWrapper._(rt);
     wrapper._sessionOptions = rt.createSessionOptions();
 
-    if (configureProviders != null) {
-      final providers = OrtProviders(rt);
-      configureProviders(providers, wrapper._sessionOptions);
-    }
+    final providers = OrtProviders(rt);
+    providers.appendDefaultProviders(
+      wrapper._sessionOptions,
+      providerOptions: providerOptions,
+    );
+
+    wrapper._session = rt.createSession(modelPath, wrapper._sessionOptions);
+    wrapper._inputNames = rt.getSessionInputNames(wrapper._session);
+    wrapper._outputNames = rt.getSessionOutputNames(wrapper._session);
+
+    return wrapper;
+  }
+
+  /// Creates a session with **manual** provider selection.
+  ///
+  /// ```dart
+  /// OrtSessionWrapper.createWithProviders(
+  ///   modelPath,
+  ///   providers: [OrtProvider.coreML, OrtProvider.cpu],
+  ///   providerOptions: {
+  ///     OrtProvider.coreML: {'MLComputeUnits': 'CPUAndGPU'},
+  ///   },
+  /// );
+  /// ```
+  static OrtSessionWrapper createWithProviders(
+    String modelPath, {
+    required List<OrtProvider> providers,
+    OnnxRuntime? runtime,
+    Map<OrtProvider, Map<String, String>> providerOptions = const {},
+  }) {
+    final rt = runtime ?? OnnxRuntime.instance;
+    rt.ensureInitialized();
+
+    final wrapper = OrtSessionWrapper._(rt);
+    wrapper._sessionOptions = rt.createSessionOptions();
+
+    final ortProviders = OrtProviders(rt);
+    ortProviders.appendProviders(
+      wrapper._sessionOptions,
+      providers,
+      providerOptions: providerOptions,
+    );
+
+    wrapper._session = rt.createSession(modelPath, wrapper._sessionOptions);
+    wrapper._inputNames = rt.getSessionInputNames(wrapper._session);
+    wrapper._outputNames = rt.getSessionOutputNames(wrapper._session);
+
+    return wrapper;
+  }
+
+  /// Creates a session with a **custom** configuration callback for full
+  /// control over session options and providers.
+  static OrtSessionWrapper createWithCustomConfig(
+    String modelPath, {
+    OnnxRuntime? runtime,
+    required void Function(
+            OrtProviders providers, Pointer<OrtSessionOptions> options)
+        configure,
+  }) {
+    final rt = runtime ?? OnnxRuntime.instance;
+    rt.ensureInitialized();
+
+    final wrapper = OrtSessionWrapper._(rt);
+    wrapper._sessionOptions = rt.createSessionOptions();
+
+    final providers = OrtProviders(rt);
+    configure(providers, wrapper._sessionOptions);
 
     wrapper._session = rt.createSession(modelPath, wrapper._sessionOptions);
     wrapper._inputNames = rt.getSessionInputNames(wrapper._session);

@@ -13,6 +13,11 @@ class OnnxRuntime {
 
   OnnxRuntime._();
 
+  /// Creates a standalone (non-singleton) instance.
+  ///
+  /// Useful for background isolates that need their own runtime.
+  factory OnnxRuntime.create() => OnnxRuntime._();
+
   static OnnxRuntime? _instance;
 
   static OnnxRuntime get instance {
@@ -32,7 +37,7 @@ class OnnxRuntime {
       if (Platform.isAndroid) {
         dylib = DynamicLibrary.open('libonnxruntime.so');
       } else if (Platform.isIOS || Platform.isMacOS) {
-        dylib = DynamicLibrary.process();
+          dylib = DynamicLibrary.process();
       } else if (Platform.isLinux) {
         dylib = DynamicLibrary.open('libonnxruntime.so');
       } else if (Platform.isWindows) {
