@@ -35,3 +35,4 @@ flutter:
    - assets/mnist/
    - assets/mnist/test_data_set_0/
    - assets/yolo11.onnx
+   - assets/yolo11.ort

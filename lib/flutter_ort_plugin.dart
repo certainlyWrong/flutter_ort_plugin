@@ -7,3 +7,4 @@ export 'ort_providers.dart';
 export 'ort_session_wrapper.dart';
 export 'ort_tensor.dart';
 export 'ort_value_wrapper.dart';
+export 'xnnpack_options.dart';

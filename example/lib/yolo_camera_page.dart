@@ -3,13 +3,21 @@ import 'dart:io';
 
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_ort_plugin/flutter_ort_plugin.dart';
 
 import 'yolo_detector.dart';
 
 class YoloCameraPage extends StatefulWidget {
   final String modelPath;
+  final List<OrtProvider>? providers;
+  final Map<OrtProvider, Map<String, String>> providerOptions;
 
-  const YoloCameraPage({super.key, required this.modelPath});
+  const YoloCameraPage({
+    super.key,
+    required this.modelPath,
+    this.providers,
+    this.providerOptions = const {},
+  });
 
   @override
   State<YoloCameraPage> createState() => _YoloCameraPageState();
@@ -39,7 +47,11 @@ class _YoloCameraPageState extends State<YoloCameraPage>
   Future<void> _initialize() async {
     try {
       // Load YOLO model
-      _detector = YoloDetector.create(widget.modelPath);
+      _detector = YoloDetector.create(
+        widget.modelPath,
+        providers: widget.providers,
+        providerOptions: widget.providerOptions,
+      );
 
       // Get cameras
       final cameras = await availableCameras();
@@ -166,17 +178,17 @@ class _YoloCameraPageState extends State<YoloCameraPage>
               ),
             )
           : _error != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text(
-                      _error!,
-                      style: const TextStyle(color: Colors.redAccent),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                )
-              : _buildCameraView(),
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  _error!,
+                  style: const TextStyle(color: Colors.redAccent),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            )
+          : _buildCameraView(),
     );
   }
 
@@ -272,16 +284,20 @@ class _YoloCameraPageState extends State<YoloCameraPage>
                 ),
               ),
               child: ListView.builder(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 scrollDirection: Axis.horizontal,
                 itemCount: _detections.length,
                 itemBuilder: (context, index) {
                   final det = _detections[index];
                   return Container(
                     margin: const EdgeInsets.only(right: 8),
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: _colorForClass(det.classId).withValues(alpha: 0.8),
                       borderRadius: BorderRadius.circular(12),

@@ -5,17 +5,60 @@ import 'package:ffi/ffi.dart';
 
 import 'bindings/onnxruntime_generated.dart';
 import 'onnx_runtinme.dart';
+import 'xnnpack_options.dart';
 
+/// Execution providers for ONNX Runtime.
+///
+/// ## Implementation Status
+///
+/// ✅ **Fully Implemented** (with dedicated configuration):
+/// - [cpu] — Always available
+/// - [coreML] — iOS/macOS with dedicated options
+/// - [nnapi] — Android with flags (FP16, NCHW, CPU disabled)
+/// - [xnnpack] — Android with thread configuration
+///
+/// ⚠️ **Generic API Only** (may work but no dedicated support):
+/// - [qnn] — Qualcomm Neural Network (placeholder)
+/// - [cuda] — NVIDIA CUDA (placeholder)
+/// - [tensorRT] — NVIDIA TensorRT (placeholder)
+/// - [rocm] — AMD ROCm (placeholder)
+/// - [openVINO] — Intel OpenVINO (placeholder)
+/// - [dnnl] — Intel oneDNN (placeholder)
 enum OrtProvider {
+  /// CPU execution provider — always available.
   cpu('CPUExecutionProvider'),
+
+  /// CoreML execution provider for iOS/macOS (fully implemented).
   coreML('CoreMLExecutionProvider'),
+
+  /// NNAPI execution provider for Android NPU/GPU (fully implemented).
+  /// Supports FP16, NCHW, CPU-only flags.
   nnapi('NnapiExecutionProvider'),
+
+  // === Desktop GPU providers (generic API only) ===
+
+  /// CUDA execution provider for NVIDIA GPUs (generic API only).
   cuda('CUDAExecutionProvider'),
+
+  /// TensorRT execution provider for NVIDIA GPUs (generic API only).
   tensorRT('TensorrtExecutionProvider'),
+
+  /// ROCm execution provider for AMD GPUs (generic API only).
   rocm('ROCMExecutionProvider'),
+
+  /// OpenVINO execution provider for Intel devices (generic API only).
   openVINO('OpenVINOExecutionProvider'),
+
+  /// DNNL/oneDNN execution provider (generic API only).
   dnnl('DnnlExecutionProvider'),
+
+  // === Mobile/Other providers ===
+
+  /// Qualcomm Neural Network (QNN) provider (generic API only).
   qnn('QNNExecutionProvider'),
+
+  /// XNNPACK execution provider for optimized CPU inference.
+  /// Uses NEON SIMD on ARM. Fully implemented with thread configuration.
   xnnpack('XNNPACKExecutionProvider');
 
   final String ortName;
@@ -64,7 +107,21 @@ class OrtProviders {
   }
 
   bool isProviderAvailable(OrtProvider provider) {
-    return getAvailableProviders().contains(provider.ortName);
+    final available = getAvailableProviders();
+    if (available.contains(provider.ortName)) return true;
+    // XNNPACK pode aparecer com X minúsculo
+    if (provider == OrtProvider.xnnpack &&
+        (available.contains('XnnpackExecutionProvider') ||
+            available.contains('XNNPACKExecutionProvider'))) {
+      return true;
+    }
+    // NNAPI pode ter variações de case
+    if (provider == OrtProvider.nnapi &&
+        (available.contains('NnapiExecutionProvider') ||
+            available.contains('NNAPIExecutionProvider'))) {
+      return true;
+    }
+    return false;
   }
 
   List<OrtProvider> getDefaultProvidersForPlatform() {
@@ -81,12 +138,13 @@ class OrtProviders {
 
     if (Platform.isAndroid) {
       final providers = <OrtProvider>[];
+      if (available.contains('XnnpackExecutionProvider') ||
+          available.contains('XNNPACKExecutionProvider')) {
+        providers.add(OrtProvider.xnnpack);
+      }
       if (available.contains('NnapiExecutionProvider') ||
           available.contains('NNAPIExecutionProvider')) {
         providers.add(OrtProvider.nnapi);
-      }
-      if (available.contains(OrtProvider.xnnpack.ortName)) {
-        providers.add(OrtProvider.xnnpack);
       }
       if (available.contains(OrtProvider.qnn.ortName)) {
         providers.add(OrtProvider.qnn);
@@ -156,11 +214,7 @@ class OrtProviders {
       case OrtProvider.qnn:
         _appendViaGenericApi(options, 'QNN', providerOptions: providerOptions);
       case OrtProvider.xnnpack:
-        _appendViaGenericApi(
-          options,
-          'XNNPACK',
-          providerOptions: providerOptions,
-        );
+        _appendXnnpack(options, providerOptions: providerOptions);
     }
   }
 
@@ -266,6 +320,14 @@ class OrtProviders {
       calloc.free(keysPtr);
       calloc.free(valuesPtr);
     }
+  }
+
+  void _appendXnnpack(
+    Pointer<OrtSessionOptions> options, {
+    Map<String, String> providerOptions = const {},
+  }) {
+    final opts = XnnpackOptions.fromMap(providerOptions);
+    _appendViaGenericApi(options, 'XNNPACK', providerOptions: opts.toMap());
   }
 
   void _appendNnapi(

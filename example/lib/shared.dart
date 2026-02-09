@@ -18,11 +18,12 @@ Future<String> copyModelToTemp() async {
   return file.path;
 }
 
-Future<String> copyYoloModelToTemp() async {
+Future<String> copyYoloModelToTemp({String asset = 'assets/yolo11.ort'}) async {
+  final filename = asset.split('/').last;
   final dir = await getTemporaryDirectory();
-  final file = File('${dir.path}/yolo11.onnx');
+  final file = File('${dir.path}/$filename');
   if (await file.exists()) return file.path;
-  final bytes = await rootBundle.load('assets/yolo11.onnx');
+  final bytes = await rootBundle.load(asset);
   await file.writeAsBytes(bytes.buffer.asUint8List());
   return file.path;
 }

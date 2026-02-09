@@ -9,7 +9,7 @@ import 'inference_page.dart';
 import 'isolate_page.dart';
 import 'providers_page.dart';
 import 'shared.dart';
-import 'yolo_camera_page.dart';
+import 'yolo_setup_page.dart';
 
 void main() {
   runApp(const MyApp());
@@ -48,7 +48,6 @@ class _HomePageState extends State<HomePage> {
   String? _error;
   String _deviceInfo = '';
   String? _modelPath;
-  String? _yoloModelPath;
   List<String> _availableProviders = [];
   List<OrtProvider> _defaultProviders = [];
 
@@ -69,7 +68,6 @@ class _HomePageState extends State<HomePage> {
 
       await _collectDeviceInfo();
       _modelPath = await copyModelToTemp();
-      _yoloModelPath = await copyYoloModelToTemp();
 
       setState(() => _initialized = true);
     } catch (e, stack) {
@@ -190,8 +188,7 @@ class _HomePageState extends State<HomePage> {
                   title: 'YOLO Real-Time',
                   subtitle:
                       'YOLOv11 object detection with live camera feed and bounding boxes',
-                  onTap: () =>
-                      _push(YoloCameraPage(modelPath: _yoloModelPath!)),
+                  onTap: () => _push(const YoloSetupPage()),
                 ),
               ],
             ),

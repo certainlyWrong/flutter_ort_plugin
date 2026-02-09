@@ -102,11 +102,24 @@ await session.dispose();
 
 The plugin auto-detects the best provider per platform:
 
-| Platform      | Default providers (in order)                  |
-|---------------|-----------------------------------------------|
-| iOS / macOS   | CoreML, CPU                                   |
-| Android       | XNNPACK, QNN, CPU                             |
-| Linux/Windows | CUDA, TensorRT, ROCm, OpenVINO, DNNL, CPU    |
+| Platform      | Default providers   | Supported   | Notes                                        |
+| ------------- | ------------------- | ----------- | -------------------------------------------- |
+| iOS/macOS     | CoreML, CPU         | ✅ Fully    | CoreML via dedicated config                  |
+| Android       | XNNPACK, NNAPI, CPU | ✅ Fully    | NNAPI with flags, XNNPACK with thread config |
+| Linux/Windows | CPU                 | ✅ CPU only | GPU providers via generic API only           |
+
+### Provider Implementation Status
+
+| Provider   | Status          | Notes                                            |
+| ---------- | --------------- | ------------------------------------------------ |
+| CPU        | ✅ Ready        | Always available, built-in                       |
+| CoreML     | ✅ Ready        | iOS/macOS acceleration                           |
+| NNAPI      | ✅ Ready        | Android NPU/GPU with FP16/NCHW flags             |
+| XNNPACK    | ✅ Ready        | Android CPU SIMD optimization with thread config |
+| QNN        | ⚠️ Generic only | Qualcomm - not fully implemented                 |
+| CUDA       | ⚠️ Generic only | NVIDIA - not fully implemented                   |
+| TensorRT   | ⚠️ Generic only | NVIDIA - not fully implemented                   |
+| All others | ⚠️ Generic only | May work via generic API                         |
 
 ### Automatic (default)
 
@@ -127,6 +140,41 @@ final session = OrtSessionWrapper.createWithProviders(
 );
 ```
 
+### XNNPACK (Android optimized CPU)
+
+XNNPACK is the recommended provider for Android devices without a dedicated NPU:
+
+```dart
+import 'package:flutter_ort_plugin/flutter_ort_plugin.dart';
+
+final session = OrtSessionWrapper.createWithProviders(
+  'model.onnx',
+  providers: [OrtProvider.xnnpack, OrtProvider.cpu],
+  providerOptions: {
+    OrtProvider.xnnpack: XnnpackOptions(
+      numThreads: 4,  // Use 4 threads (default: all cores)
+    ).toMap(),
+  },
+);
+```
+
+### NNAPI (Android NPU/GPU)
+
+NNAPI supports hardware acceleration but may have compatibility issues with some models:
+
+```dart
+final session = OrtSessionWrapper.createWithProviders(
+  'model.onnx',
+  providers: [OrtProvider.nnapi, OrtProvider.cpu],
+  providerOptions: {
+    OrtProvider.nnapi: {
+      'use_fp16': 'true',      // Use FP16 for faster inference
+      'use_nchw': 'false',     // Keep NHWC format
+    },
+  },
+);
+```
+
 ### Querying available providers
 
 ```dart
@@ -142,11 +190,11 @@ providers.isProviderAvailable(OrtProvider.coreML); // true
 
 ### High-Level (no FFI pointers)
 
-| Class | Purpose |
-|---|---|
-| `OrtSessionWrapper` | Load model, run inference, manage lifecycle |
-| `OrtValueWrapper` | Create/read tensors with Dart types |
-| `OrtProviders` | Query and configure execution providers |
+| Class               | Purpose                                              |
+| ------------------- | ---------------------------------------------------- |
+| `OrtSessionWrapper` | Load model, run inference, manage lifecycle          |
+| `OrtValueWrapper`   | Create/read tensors with Dart types                  |
+| `OrtProviders`      | Query and configure execution providers              |
 | `OrtIsolateSession` | Run inference off the UI thread (background isolate) |
 
 #### OrtSessionWrapper

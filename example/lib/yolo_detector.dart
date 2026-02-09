@@ -10,19 +10,86 @@ import 'package:image/image.dart' as img;
 // ---------------------------------------------------------------------------
 
 const List<String> cocoLabels = [
-  'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train',
-  'truck', 'boat', 'traffic light', 'fire hydrant', 'stop sign',
-  'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep', 'cow',
-  'elephant', 'bear', 'zebra', 'giraffe', 'backpack', 'umbrella', 'handbag',
-  'tie', 'suitcase', 'frisbee', 'skis', 'snowboard', 'sports ball', 'kite',
-  'baseball bat', 'baseball glove', 'skateboard', 'surfboard',
-  'tennis racket', 'bottle', 'wine glass', 'cup', 'fork', 'knife', 'spoon',
-  'bowl', 'banana', 'apple', 'sandwich', 'orange', 'broccoli', 'carrot',
-  'hot dog', 'pizza', 'donut', 'cake', 'chair', 'couch', 'potted plant',
-  'bed', 'dining table', 'toilet', 'tv', 'laptop', 'mouse', 'remote',
-  'keyboard', 'cell phone', 'microwave', 'oven', 'toaster', 'sink',
-  'refrigerator', 'book', 'clock', 'vase', 'scissors', 'teddy bear',
-  'hair drier', 'toothbrush',
+  'person',
+  'bicycle',
+  'car',
+  'motorcycle',
+  'airplane',
+  'bus',
+  'train',
+  'truck',
+  'boat',
+  'traffic light',
+  'fire hydrant',
+  'stop sign',
+  'parking meter',
+  'bench',
+  'bird',
+  'cat',
+  'dog',
+  'horse',
+  'sheep',
+  'cow',
+  'elephant',
+  'bear',
+  'zebra',
+  'giraffe',
+  'backpack',
+  'umbrella',
+  'handbag',
+  'tie',
+  'suitcase',
+  'frisbee',
+  'skis',
+  'snowboard',
+  'sports ball',
+  'kite',
+  'baseball bat',
+  'baseball glove',
+  'skateboard',
+  'surfboard',
+  'tennis racket',
+  'bottle',
+  'wine glass',
+  'cup',
+  'fork',
+  'knife',
+  'spoon',
+  'bowl',
+  'banana',
+  'apple',
+  'sandwich',
+  'orange',
+  'broccoli',
+  'carrot',
+  'hot dog',
+  'pizza',
+  'donut',
+  'cake',
+  'chair',
+  'couch',
+  'potted plant',
+  'bed',
+  'dining table',
+  'toilet',
+  'tv',
+  'laptop',
+  'mouse',
+  'remote',
+  'keyboard',
+  'cell phone',
+  'microwave',
+  'oven',
+  'toaster',
+  'sink',
+  'refrigerator',
+  'book',
+  'clock',
+  'vase',
+  'scissors',
+  'teddy bear',
+  'hair drier',
+  'toothbrush',
 ];
 
 // ---------------------------------------------------------------------------
@@ -60,9 +127,19 @@ class YoloDetector {
 
   YoloDetector._(this._session, this._runtime);
 
-  static YoloDetector create(String modelPath) {
+  static YoloDetector create(
+    String modelPath, {
+    List<OrtProvider>? providers,
+    Map<OrtProvider, Map<String, String>> providerOptions = const {},
+  }) {
     final runtime = OnnxRuntime.instance;
-    final session = OrtSessionWrapper.create(modelPath);
+    final session = providers != null
+        ? OrtSessionWrapper.createWithProviders(
+            modelPath,
+            providers: providers,
+            providerOptions: providerOptions,
+          )
+        : OrtSessionWrapper.create(modelPath, providerOptions: providerOptions);
     return YoloDetector._(session, runtime);
   }
 
@@ -93,11 +170,12 @@ class YoloDetector {
     double iouThreshold = 0.45,
   }) {
     final preprocessed = _preprocess(image);
-    final inputValue = OrtValueWrapper.fromFloat(
-      _runtime,
-      [1, 3, inputSize, inputSize],
-      preprocessed,
-    );
+    final inputValue = OrtValueWrapper.fromFloat(_runtime, [
+      1,
+      3,
+      inputSize,
+      inputSize,
+    ], preprocessed);
 
     try {
       // Output shape: (1, 84, 8400) → 84 * 8400 = 705600
@@ -125,10 +203,7 @@ class YoloDetector {
 
   Float32List _preprocess(img.Image source) {
     // Letterbox resize
-    final scale = min(
-      inputSize / source.width,
-      inputSize / source.height,
-    );
+    final scale = min(inputSize / source.width, inputSize / source.height);
     final newW = (source.width * scale).round();
     final newH = (source.height * scale).round();
     final padX = (inputSize - newW) ~/ 2;
@@ -214,17 +289,19 @@ class YoloDetector {
       final cy2 = y2.clamp(0.0, origH.toDouble());
 
       // Normalize to [0, 1]
-      candidates.add(Detection(
-        x1: cx1 / origW,
-        y1: cy1 / origH,
-        x2: cx2 / origW,
-        y2: cy2 / origH,
-        classId: bestClass,
-        label: bestClass < cocoLabels.length
-            ? cocoLabels[bestClass]
-            : 'class_$bestClass',
-        confidence: bestScore,
-      ));
+      candidates.add(
+        Detection(
+          x1: cx1 / origW,
+          y1: cy1 / origH,
+          x2: cx2 / origW,
+          y2: cy2 / origH,
+          classId: bestClass,
+          label: bestClass < cocoLabels.length
+              ? cocoLabels[bestClass]
+              : 'class_$bestClass',
+          confidence: bestScore,
+        ),
+      );
     }
 
     // NMS

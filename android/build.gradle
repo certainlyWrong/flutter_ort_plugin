@@ -59,7 +59,7 @@ android {
 
     dependencies {
         // Isso baixa o AAR automaticamente do Maven Central
-        implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.24.1'
+        // implementation 'com.microsoft.onnxruntime:onnxruntime:1.24.1'
     }
 
     defaultConfig {
