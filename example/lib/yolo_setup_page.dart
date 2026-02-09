@@ -5,6 +5,10 @@ import 'package:flutter_ort_plugin/flutter_ort_plugin.dart';
 
 import 'shared.dart';
 import 'yolo_camera_page.dart';
+import 'yolo_image_page.dart';
+import 'yolo_video_page.dart';
+
+enum InputMode { camera, image, video }
 
 class YoloSetupPage extends StatefulWidget {
   const YoloSetupPage({super.key});
@@ -21,6 +25,9 @@ class _YoloSetupPageState extends State<YoloSetupPage> {
   late String _selectedModel = _isAndroid
       ? 'assets/yolo11.ort'
       : 'assets/yolo11.onnx';
+
+  // Input mode selection
+  InputMode _inputMode = InputMode.image;
 
   // Provider selection
   List<String> _availableProviders = [];
@@ -126,15 +133,32 @@ class _YoloSetupPageState extends State<YoloSetupPage> {
         }
       }
 
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => YoloCameraPage(
+      Widget page;
+      switch (_inputMode) {
+        case InputMode.camera:
+          page = YoloCameraPage(
             modelPath: modelPath,
             providers: providers,
             providerOptions: providerOpts,
-          ),
-        ),
-      );
+          );
+          break;
+        case InputMode.image:
+          page = YoloImagePage(
+            modelPath: modelPath,
+            providers: providers,
+            providerOptions: providerOpts,
+          );
+          break;
+        case InputMode.video:
+          page = YoloVideoPage(
+            modelPath: modelPath,
+            providers: providers,
+            providerOptions: providerOpts,
+          );
+          break;
+      }
+
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
     } catch (e) {
       setState(() => _error = e.toString());
     } finally {
@@ -154,6 +178,63 @@ class _YoloSetupPageState extends State<YoloSetupPage> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          // Input mode section
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Input Source',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  RadioListTile<InputMode>(
+                    title: const Text('Camera'),
+                    subtitle: const Text(
+                      'Real-time detection using device camera',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                    value: InputMode.camera,
+                    groupValue: _inputMode,
+                    onChanged: (v) => setState(() => _inputMode = v!),
+                    dense: true,
+                    secondary: const Icon(Icons.camera_alt),
+                  ),
+                  RadioListTile<InputMode>(
+                    title: const Text('Static Image'),
+                    subtitle: const Text(
+                      'Test with sample images (works on emulator)',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                    value: InputMode.image,
+                    groupValue: _inputMode,
+                    onChanged: (v) => setState(() => _inputMode = v!),
+                    dense: true,
+                    secondary: const Icon(Icons.image),
+                  ),
+                  RadioListTile<InputMode>(
+                    title: const Text('Video File'),
+                    subtitle: const Text(
+                      'Process video file frame by frame',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                    value: InputMode.video,
+                    groupValue: _inputMode,
+                    onChanged: (v) => setState(() => _inputMode = v!),
+                    dense: true,
+                    secondary: const Icon(Icons.video_file),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
           // Model format section
           Card(
             child: Padding(
@@ -459,7 +540,7 @@ class _YoloSetupPageState extends State<YoloSetupPage> {
                           'Skip GPU, use ANE + CPU',
                           style: TextStyle(fontSize: 11),
                         ),
-                        value: 'CPU_AND_NE',
+                        value: 'CPUAndNeuralEngine',
                         groupValue: _coremlComputeUnits,
                         onChanged: (v) =>
                             setState(() => _coremlComputeUnits = v!),
@@ -471,7 +552,7 @@ class _YoloSetupPageState extends State<YoloSetupPage> {
                           'Skip Neural Engine, use GPU + CPU',
                           style: TextStyle(fontSize: 11),
                         ),
-                        value: 'CPU_AND_GPU',
+                        value: 'CPUAndGPU',
                         groupValue: _coremlComputeUnits,
                         onChanged: (v) =>
                             setState(() => _coremlComputeUnits = v!),
@@ -483,7 +564,7 @@ class _YoloSetupPageState extends State<YoloSetupPage> {
                           'CoreML CPU only (for testing/debugging)',
                           style: TextStyle(fontSize: 11),
                         ),
-                        value: 'CPU_ONLY',
+                        value: 'CPUOnly',
                         groupValue: _coremlComputeUnits,
                         onChanged: (v) =>
                             setState(() => _coremlComputeUnits = v!),
@@ -574,8 +655,8 @@ class _YoloSetupPageState extends State<YoloSetupPage> {
                       color: Colors.white,
                     ),
                   )
-                : const Icon(Icons.camera_alt),
-            label: Text(_loading ? 'Loading model...' : 'Start Detection'),
+                : _getInputIcon(),
+            label: Text(_loading ? 'Loading model...' : _getButtonText()),
             style: FilledButton.styleFrom(
               minimumSize: const Size.fromHeight(52),
               textStyle: const TextStyle(fontSize: 16),
@@ -605,6 +686,28 @@ class _YoloSetupPageState extends State<YoloSetupPage> {
         return const Icon(Icons.memory, color: Colors.grey);
       default:
         return Icon(Icons.extension, color: Colors.orange[700]);
+    }
+  }
+
+  Icon _getInputIcon() {
+    switch (_inputMode) {
+      case InputMode.camera:
+        return const Icon(Icons.camera_alt);
+      case InputMode.image:
+        return const Icon(Icons.image);
+      case InputMode.video:
+        return const Icon(Icons.video_file);
+    }
+  }
+
+  String _getButtonText() {
+    switch (_inputMode) {
+      case InputMode.camera:
+        return 'Start Camera Detection';
+      case InputMode.image:
+        return 'Open Image Test';
+      case InputMode.video:
+        return 'Load Video Detection';
     }
   }
 }

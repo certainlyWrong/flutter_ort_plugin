@@ -181,7 +181,7 @@ class _YoloCameraPageState extends State<YoloCameraPage>
           ? Center(
               child: Padding(
                 padding: const EdgeInsets.all(24),
-                child: Text(
+                child: SelectableText(
                   _error!,
                   style: const TextStyle(color: Colors.redAccent),
                   textAlign: TextAlign.center,
