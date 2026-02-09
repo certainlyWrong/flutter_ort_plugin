@@ -13,6 +13,11 @@ class OnnxRuntime {
 
   OnnxRuntime._();
 
+  /// Creates a standalone (non-singleton) instance.
+  ///
+  /// Useful for background isolates that need their own runtime.
+  factory OnnxRuntime.create() => OnnxRuntime._();
+
   static OnnxRuntime? _instance;
 
   static OnnxRuntime get instance {
@@ -109,6 +114,58 @@ class OnnxRuntime {
     } finally {
       calloc.free(optionsPtr);
     }
+  }
+
+  /// Sets the number of threads used to parallelize execution **within** nodes.
+  /// A value of 0 uses the ORT default. On Android Big.LITTLE, 2–4 is optimal.
+  void setIntraOpNumThreads(
+    Pointer<OrtSessionOptions> options,
+    int numThreads,
+  ) {
+    ensureInitialized();
+    final status = _api.ref.SetIntraOpNumThreads
+        .asFunction<
+          Pointer<OrtStatus> Function(Pointer<OrtSessionOptions>, int)
+        >()(options, numThreads);
+    _checkStatus(status);
+  }
+
+  /// Sets the number of threads used to parallelize execution **across** nodes.
+  /// Only effective when execution mode is [ExecutionMode.ORT_PARALLEL].
+  void setInterOpNumThreads(
+    Pointer<OrtSessionOptions> options,
+    int numThreads,
+  ) {
+    ensureInitialized();
+    final status = _api.ref.SetInterOpNumThreads
+        .asFunction<
+          Pointer<OrtStatus> Function(Pointer<OrtSessionOptions>, int)
+        >()(options, numThreads);
+    _checkStatus(status);
+  }
+
+  /// Sets the graph optimization level.
+  /// Values: 0 = disabled, 1 = basic, 2 = extended, 99 = all.
+  void setGraphOptimizationLevel(
+    Pointer<OrtSessionOptions> options,
+    int level,
+  ) {
+    ensureInitialized();
+    final status = _api.ref.SetSessionGraphOptimizationLevel
+        .asFunction<
+          Pointer<OrtStatus> Function(Pointer<OrtSessionOptions>, int)
+        >()(options, level);
+    _checkStatus(status);
+  }
+
+  /// Sets the execution mode: 0 = sequential, 1 = parallel.
+  void setExecutionMode(Pointer<OrtSessionOptions> options, int mode) {
+    ensureInitialized();
+    final status = _api.ref.SetSessionExecutionMode
+        .asFunction<
+          Pointer<OrtStatus> Function(Pointer<OrtSessionOptions>, int)
+        >()(options, mode);
+    _checkStatus(status);
   }
 
   Pointer<OrtSession> createSession(

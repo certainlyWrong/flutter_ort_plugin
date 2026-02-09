@@ -26,5 +26,6 @@ flutter:
         ffiPlugin: true
       ios:
         ffiPlugin: true
+        pluginClass: FlutterOrtPlugin
       linux:
         ffiPlugin: true

@@ -5,6 +5,7 @@ import 'bindings/onnxruntime_generated.dart';
 import 'onnx_runtinme.dart';
 import 'ort_providers.dart';
 import 'ort_value_wrapper.dart';
+import 'session_config.dart';
 
 class OrtSessionWrapper {
   final OnnxRuntime _runtime;
@@ -16,11 +17,94 @@ class OrtSessionWrapper {
 
   OrtSessionWrapper._(this._runtime);
 
+  /// Creates a session with **automatic** provider selection based on the
+  /// current platform. Providers are chosen via
+  /// [OrtProviders.getDefaultProvidersForPlatform].
+  ///
+  /// Use [providerOptions] to pass per-provider configuration, e.g.:
+  /// ```dart
+  /// OrtSessionWrapper.create(
+  ///   modelPath,
+  ///   providerOptions: {
+  ///     OrtProvider.coreML: {'MLComputeUnits': 'ALL'},
+  ///   },
+  /// );
+  /// ```
   static OrtSessionWrapper create(
     String modelPath, {
     OnnxRuntime? runtime,
-    void Function(OrtProviders providers, Pointer<OrtSessionOptions> options)?
-    configureProviders,
+    Map<OrtProvider, Map<String, String>> providerOptions = const {},
+    SessionConfig sessionConfig = const SessionConfig(),
+  }) {
+    final rt = runtime ?? OnnxRuntime.instance;
+    rt.ensureInitialized();
+
+    final wrapper = OrtSessionWrapper._(rt);
+    wrapper._sessionOptions = rt.createSessionOptions();
+    _applySessionConfig(rt, wrapper._sessionOptions, sessionConfig);
+
+    final providers = OrtProviders(rt);
+    providers.appendDefaultProviders(
+      wrapper._sessionOptions,
+      providerOptions: providerOptions,
+    );
+
+    wrapper._session = rt.createSession(modelPath, wrapper._sessionOptions);
+    wrapper._inputNames = rt.getSessionInputNames(wrapper._session);
+    wrapper._outputNames = rt.getSessionOutputNames(wrapper._session);
+
+    return wrapper;
+  }
+
+  /// Creates a session with **manual** provider selection.
+  ///
+  /// ```dart
+  /// OrtSessionWrapper.createWithProviders(
+  ///   modelPath,
+  ///   providers: [OrtProvider.coreML, OrtProvider.cpu],
+  ///   providerOptions: {
+  ///     OrtProvider.coreML: {'MLComputeUnits': 'CPUAndGPU'},
+  ///   },
+  /// );
+  /// ```
+  static OrtSessionWrapper createWithProviders(
+    String modelPath, {
+    required List<OrtProvider> providers,
+    OnnxRuntime? runtime,
+    Map<OrtProvider, Map<String, String>> providerOptions = const {},
+    SessionConfig sessionConfig = const SessionConfig(),
+  }) {
+    final rt = runtime ?? OnnxRuntime.instance;
+    rt.ensureInitialized();
+
+    final wrapper = OrtSessionWrapper._(rt);
+    wrapper._sessionOptions = rt.createSessionOptions();
+    _applySessionConfig(rt, wrapper._sessionOptions, sessionConfig);
+
+    final ortProviders = OrtProviders(rt);
+    ortProviders.appendProviders(
+      wrapper._sessionOptions,
+      providers,
+      providerOptions: providerOptions,
+    );
+
+    wrapper._session = rt.createSession(modelPath, wrapper._sessionOptions);
+    wrapper._inputNames = rt.getSessionInputNames(wrapper._session);
+    wrapper._outputNames = rt.getSessionOutputNames(wrapper._session);
+
+    return wrapper;
+  }
+
+  /// Creates a session with a **custom** configuration callback for full
+  /// control over session options and providers.
+  static OrtSessionWrapper createWithCustomConfig(
+    String modelPath, {
+    OnnxRuntime? runtime,
+    required void Function(
+      OrtProviders providers,
+      Pointer<OrtSessionOptions> options,
+    )
+    configure,
   }) {
     final rt = runtime ?? OnnxRuntime.instance;
     rt.ensureInitialized();
@@ -28,10 +112,8 @@ class OrtSessionWrapper {
     final wrapper = OrtSessionWrapper._(rt);
     wrapper._sessionOptions = rt.createSessionOptions();
 
-    if (configureProviders != null) {
-      final providers = OrtProviders(rt);
-      configureProviders(providers, wrapper._sessionOptions);
-    }
+    final providers = OrtProviders(rt);
+    configure(providers, wrapper._sessionOptions);
 
     wrapper._session = rt.createSession(modelPath, wrapper._sessionOptions);
     wrapper._inputNames = rt.getSessionInputNames(wrapper._session);
@@ -124,5 +206,20 @@ class OrtSessionWrapper {
     if (_disposed) {
       throw StateError('OrtSessionWrapper has already been disposed.');
     }
+  }
+
+  static void _applySessionConfig(
+    OnnxRuntime rt,
+    Pointer<OrtSessionOptions> options,
+    SessionConfig config,
+  ) {
+    if (config.intraOpThreads > 0) {
+      rt.setIntraOpNumThreads(options, config.intraOpThreads);
+    }
+    if (config.interOpThreads > 0) {
+      rt.setInterOpNumThreads(options, config.interOpThreads);
+    }
+    rt.setGraphOptimizationLevel(options, config.graphOptimizationLevel.value);
+    rt.setExecutionMode(options, config.executionMode.value);
   }
 }

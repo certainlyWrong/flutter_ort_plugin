@@ -160,6 +160,27 @@ class OnnxRuntimeBindings {
       _OrtSessionOptionsAppendExecutionProvider_TensorrtPtr.asFunction<
         OrtStatusPtr Function(ffi.Pointer<OrtSessionOptions>, int)
       >();
+
+  OrtStatusPtr OrtSessionOptionsAppendExecutionProvider_Nnapi(
+    ffi.Pointer<OrtSessionOptions> options,
+    int nnapi_flags,
+  ) {
+    return _OrtSessionOptionsAppendExecutionProvider_Nnapi(
+      options,
+      nnapi_flags,
+    );
+  }
+
+  late final _OrtSessionOptionsAppendExecutionProvider_NnapiPtr =
+      _lookup<
+        ffi.NativeFunction<
+          OrtStatusPtr Function(ffi.Pointer<OrtSessionOptions>, ffi.Uint32)
+        >
+      >('OrtSessionOptionsAppendExecutionProvider_Nnapi');
+  late final _OrtSessionOptionsAppendExecutionProvider_Nnapi =
+      _OrtSessionOptionsAppendExecutionProvider_NnapiPtr.asFunction<
+        OrtStatusPtr Function(ffi.Pointer<OrtSessionOptions>, int)
+      >();
 }
 
 /// Copied from TensorProto::DataType
@@ -14147,6 +14168,71 @@ enum OrtCompileApiFlags {
   };
 }
 
+/// NNAPIFlags are bool options we want to set for NNAPI EP
+/// This enum is defined as bit flags, and cannot have negative value
+/// To generate an uint32_t nnapi_flags for using with OrtSessionOptionsAppendExecutionProvider_Nnapi below,
+/// uint32_t nnapi_flags = 0;
+/// nnapi_flags |= NNAPI_FLAG_USE_FP16;
+enum NNAPIFlags {
+  NNAPI_FLAG_USE_NONE(0),
+
+  /// Using fp16 relaxation in NNAPI EP, this may improve perf but may also reduce precision
+  NNAPI_FLAG_USE_FP16(1),
+
+  /// Use NCHW layout in NNAPI EP, this is only available after Android API level 29
+  /// Please note for now, NNAPI perform worse using NCHW compare to using NHWC
+  NNAPI_FLAG_USE_NCHW(2),
+
+  /// Prevent NNAPI from using CPU devices.
+  ///
+  /// NNAPI is more efficient using GPU or NPU for execution, and NNAPI might fall back to its own CPU implementation
+  /// for operations not supported by GPU/NPU. The CPU implementation of NNAPI (which is called nnapi-reference)
+  /// might be less efficient than the optimized versions of the operation of ORT. It might be advantageous to disable
+  /// the NNAPI CPU fallback and handle execution using ORT kernels.
+  ///
+  /// For some models, if NNAPI would use CPU to execute an operation, and this flag is set, the execution of the
+  /// model may fall back to ORT kernels.
+  ///
+  /// This option is only available after Android API level 29, and will be ignored for Android API level 28-
+  ///
+  /// For NNAPI device assignments, see https://developer.android.com/ndk/guides/neuralnetworks#device-assignment
+  /// For NNAPI CPU fallback, see https://developer.android.com/ndk/guides/neuralnetworks#cpu-fallback
+  ///
+  /// Please note, the NNAPI EP will return error status if both NNAPI_FLAG_CPU_DISABLED
+  /// and NNAPI_FLAG_CPU_ONLY flags are set
+  NNAPI_FLAG_CPU_DISABLED(4),
+
+  /// Using CPU only in NNAPI EP, this may decrease the perf but will provide
+  /// reference output value without precision loss, which is useful for validation
+  ///
+  /// Please note, the NNAPI EP will return error status if both NNAPI_FLAG_CPU_DISABLED
+  /// and NNAPI_FLAG_CPU_ONLY flags are set
+  NNAPI_FLAG_CPU_ONLY(8);
+
+  /// Keep NNAPI_FLAG_LAST at the end of the enum definition
+  /// And assign the last NNAPIFlag to it
+  static const NNAPI_FLAG_LAST = NNAPI_FLAG_CPU_ONLY;
+
+  final int value;
+  const NNAPIFlags(this.value);
+
+  static NNAPIFlags fromValue(int value) => switch (value) {
+    0 => NNAPI_FLAG_USE_NONE,
+    1 => NNAPI_FLAG_USE_FP16,
+    2 => NNAPI_FLAG_USE_NCHW,
+    4 => NNAPI_FLAG_CPU_DISABLED,
+    8 => NNAPI_FLAG_CPU_ONLY,
+    _ => throw ArgumentError('Unknown value for NNAPIFlags: $value'),
+  };
+
+  @override
+  String toString() {
+    if (this == NNAPI_FLAG_CPU_ONLY)
+      return "NNAPIFlags.NNAPI_FLAG_CPU_ONLY, NNAPIFlags.NNAPI_FLAG_LAST";
+    return super.toString();
+  }
+}
+
 const int ORT_API_VERSION = 24;
 
-const String ORT_FILE = '/tmp/SDCGXU/temp_for_macros.hpp';
+const String ORT_FILE = '/tmp/DPGCWL/temp_for_macros.hpp';
