@@ -11,12 +11,14 @@ class YoloCameraPage extends StatefulWidget {
   final String modelPath;
   final List<OrtProvider>? providers;
   final Map<OrtProvider, Map<String, String>> providerOptions;
+  final int inputSize;
 
   const YoloCameraPage({
     super.key,
     required this.modelPath,
     this.providers,
     this.providerOptions = const {},
+    this.inputSize = 640,
   });
 
   @override
@@ -51,6 +53,7 @@ class _YoloCameraPageState extends State<YoloCameraPage>
         widget.modelPath,
         providers: widget.providers,
         providerOptions: widget.providerOptions,
+        inputSize: widget.inputSize,
       );
 
       // Get cameras

@@ -10,6 +10,72 @@ import 'yolo_video_page.dart';
 
 enum InputMode { camera, image, video }
 
+/// YOLO model entry for the setup page.
+///
+/// To add a new model, just add an entry to [YoloModelInfo.available].
+class YoloModelInfo {
+  final String assetPath;
+  final String name;
+  final int inputSize;
+  final bool isOrt;
+
+  const YoloModelInfo({
+    required this.assetPath,
+    required this.name,
+    required this.inputSize,
+    required this.isOrt,
+  });
+
+  String get displayName => assetPath.split('/').last;
+
+  String get subtitle {
+    final parts = <String>[
+      name,
+      '${inputSize}x$inputSize',
+      isOrt ? 'ORT (optimized)' : 'ONNX (standard)',
+    ];
+    return parts.join(' • ');
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is YoloModelInfo && other.assetPath == assetPath;
+
+  @override
+  int get hashCode => assetPath.hashCode;
+
+  // -----------------------------------------------------------------------
+  // Add new models here. Just append a new entry.
+  // -----------------------------------------------------------------------
+  static const List<YoloModelInfo> available = [
+    YoloModelInfo(
+      assetPath: 'assets/yolos/yolo11.onnx',
+      name: 'YOLOv11',
+      inputSize: 640,
+      isOrt: false,
+    ),
+    YoloModelInfo(
+      assetPath: 'assets/yolos/yolo11.ort',
+      name: 'YOLOv11',
+      inputSize: 640,
+      isOrt: true,
+    ),
+    YoloModelInfo(
+      assetPath: 'assets/yolos/yolov8n_320.onnx',
+      name: 'YOLOv8n (FP16)',
+      inputSize: 320,
+      isOrt: false,
+    ),
+    YoloModelInfo(
+      assetPath: 'assets/yolos/yolov8n_320.ort',
+      name: 'YOLOv8n (FP16)',
+      inputSize: 320,
+      isOrt: true,
+    ),
+  ];
+}
+
 class YoloSetupPage extends StatefulWidget {
   const YoloSetupPage({super.key});
 
@@ -21,10 +87,10 @@ class _YoloSetupPageState extends State<YoloSetupPage> {
   final bool _isAndroid = Platform.isAndroid;
   final bool _isIOS = Platform.isIOS || Platform.isMacOS;
 
-  // Model format
-  late String _selectedModel = _isAndroid
-      ? 'assets/yolo11.ort'
-      : 'assets/yolo11.onnx';
+  // Model discovery
+  List<YoloModelInfo> _discoveredModels = [];
+  YoloModelInfo? _selectedModelInfo;
+  int? _inputSizeOverride;
 
   // Input mode selection
   InputMode _inputMode = InputMode.image;
@@ -52,6 +118,13 @@ class _YoloSetupPageState extends State<YoloSetupPage> {
   void initState() {
     super.initState();
     _loadProviders();
+
+    _discoveredModels = YoloModelInfo.available;
+    // Prefer .ort on Android, .onnx on iOS
+    _selectedModelInfo = _discoveredModels.firstWhere(
+      (m) => _isAndroid ? m.isOrt : !m.isOrt,
+      orElse: () => _discoveredModels.first,
+    );
   }
 
   void _loadProviders() {
@@ -85,13 +158,21 @@ class _YoloSetupPageState extends State<YoloSetupPage> {
   }
 
   Future<void> _startDetection() async {
+    if (_selectedModelInfo == null) {
+      setState(() => _error = 'No model selected');
+      return;
+    }
+
     setState(() {
       _loading = true;
       _error = null;
     });
 
     try {
-      final modelPath = await copyYoloModelToTemp(asset: _selectedModel);
+      final modelPath = await copyYoloModelToTemp(
+        asset: _selectedModelInfo!.assetPath,
+      );
+      final inputSize = _inputSizeOverride ?? _selectedModelInfo!.inputSize;
 
       final providers = _useAutoProviders ? null : _selectedProviders.toList();
 
@@ -140,6 +221,7 @@ class _YoloSetupPageState extends State<YoloSetupPage> {
             modelPath: modelPath,
             providers: providers,
             providerOptions: providerOpts,
+            inputSize: inputSize,
           );
           break;
         case InputMode.image:
@@ -147,6 +229,7 @@ class _YoloSetupPageState extends State<YoloSetupPage> {
             modelPath: modelPath,
             providers: providers,
             providerOptions: providerOpts,
+            inputSize: inputSize,
           );
           break;
         case InputMode.video:
@@ -154,6 +237,7 @@ class _YoloSetupPageState extends State<YoloSetupPage> {
             modelPath: modelPath,
             providers: providers,
             providerOptions: providerOpts,
+            inputSize: inputSize,
           );
           break;
       }
@@ -235,7 +319,7 @@ class _YoloSetupPageState extends State<YoloSetupPage> {
 
           const SizedBox(height: 12),
 
-          // Model format section
+          // Model selection section
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -243,7 +327,7 @@ class _YoloSetupPageState extends State<YoloSetupPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Model Format',
+                    'Model',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
@@ -251,42 +335,85 @@ class _YoloSetupPageState extends State<YoloSetupPage> {
                   const SizedBox(height: 4),
                   Text(
                     _isAndroid
-                        ? 'ORT format is pre-optimized and works better with NNAPI/XNNPACK.'
+                        ? 'ORT format is pre-optimized for Android accelerators.'
                         : 'ONNX format works well with CoreML on iOS.',
                     style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                   ),
-                  const SizedBox(height: 12),
-                  if (_isAndroid)
-                    RadioListTile<String>(
-                      title: const Text('yolo11.ort'),
-                      subtitle: const Text(
-                        'Pre-optimized — recommended for Android',
-                        style: TextStyle(fontSize: 12),
-                      ),
-                      value: 'assets/yolo11.ort',
-                      groupValue: _selectedModel,
-                      onChanged: (v) => setState(() => _selectedModel = v!),
-                      dense: true,
-                      secondary: Icon(Icons.bolt, color: Colors.amber[700]),
-                    ),
-                  RadioListTile<String>(
-                    title: const Text('yolo11.onnx'),
-                    subtitle: Text(
-                      _isIOS
-                          ? 'Standard ONNX — works well with CoreML'
-                          : 'Standard ONNX — may fail with some accelerators',
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                    value: 'assets/yolo11.onnx',
-                    groupValue: _selectedModel,
-                    onChanged: (v) => setState(() => _selectedModel = v!),
-                    dense: true,
-                    secondary: const Icon(Icons.description),
-                  ),
+                  if (_discoveredModels.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 12),
+                      child: Text('No models found in assets/yolos/'),
+                    )
+                  else
+                    ..._discoveredModels.map((model) {
+                      return RadioListTile<YoloModelInfo>(
+                        title: Text(model.displayName),
+                        subtitle: Text(
+                          model.subtitle,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        value: model,
+                        groupValue: _selectedModelInfo,
+                        onChanged: (v) =>
+                            setState(() => _selectedModelInfo = v),
+                        dense: true,
+                        secondary: Icon(
+                          model.isOrt ? Icons.bolt : Icons.description,
+                          color: model.isOrt
+                              ? Colors.amber[700]
+                              : Colors.grey[600],
+                        ),
+                      );
+                    }),
                 ],
               ),
             ),
           ),
+
+          const SizedBox(height: 12),
+
+          // Input size override
+          if (_selectedModelInfo != null)
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Input Size',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Auto-detected from filename. Override if the model was exported with a different imgsz.',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    ),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      children: [160, 320, 416, 480, 640].map((size) {
+                        final isSelected =
+                            (_inputSizeOverride ??
+                                _selectedModelInfo!.inputSize) ==
+                            size;
+                        return ChoiceChip(
+                          label: Text('$size'),
+                          selected: isSelected,
+                          onSelected: (selected) {
+                            setState(() {
+                              _inputSizeOverride = selected ? size : null;
+                            });
+                          },
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
+              ),
+            ),
 
           const SizedBox(height: 12),
 
@@ -593,7 +720,12 @@ class _YoloSetupPageState extends State<YoloSetupPage> {
                     ),
                   ),
                   const SizedBox(height: 8),
-                  _SummaryRow('Model', _selectedModel.split('/').last),
+                  _SummaryRow(
+                    'Model',
+                    _selectedModelInfo != null
+                        ? '${_selectedModelInfo!.displayName} (${_inputSizeOverride ?? _selectedModelInfo!.inputSize}px)'
+                        : 'None',
+                  ),
                   _SummaryRow(
                     'Providers',
                     _useAutoProviders

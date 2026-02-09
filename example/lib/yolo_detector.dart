@@ -118,19 +118,24 @@ class Detection {
 // ---------------------------------------------------------------------------
 
 class YoloDetector {
-  static const int inputSize = 640;
   static const int numClasses = 80;
-  static const int numBoxes = 8400;
 
   final OrtSessionWrapper _session;
   final OnnxRuntime _runtime;
+  final int inputSize;
+  final int numBoxes;
 
-  YoloDetector._(this._session, this._runtime);
+  YoloDetector._(this._session, this._runtime, this.inputSize)
+    : numBoxes =
+          (inputSize ~/ 8) * (inputSize ~/ 8) +
+          (inputSize ~/ 16) * (inputSize ~/ 16) +
+          (inputSize ~/ 32) * (inputSize ~/ 32);
 
   static YoloDetector create(
     String modelPath, {
     List<OrtProvider>? providers,
     Map<OrtProvider, Map<String, String>> providerOptions = const {},
+    int inputSize = 640,
   }) {
     final runtime = OnnxRuntime.instance;
     final session = providers != null
@@ -140,7 +145,7 @@ class YoloDetector {
             providerOptions: providerOptions,
           )
         : OrtSessionWrapper.create(modelPath, providerOptions: providerOptions);
-    return YoloDetector._(session, runtime);
+    return YoloDetector._(session, runtime, inputSize);
   }
 
   void dispose() {

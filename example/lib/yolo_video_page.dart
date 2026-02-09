@@ -15,12 +15,14 @@ class YoloVideoPage extends StatefulWidget {
   final String modelPath;
   final List<OrtProvider>? providers;
   final Map<OrtProvider, Map<String, String>> providerOptions;
+  final int inputSize;
 
   const YoloVideoPage({
     super.key,
     required this.modelPath,
     this.providers,
     this.providerOptions = const {},
+    this.inputSize = 640,
   });
 
   @override
@@ -55,6 +57,7 @@ class _YoloVideoPageState extends State<YoloVideoPage> {
         widget.modelPath,
         providers: widget.providers,
         providerOptions: widget.providerOptions,
+        inputSize: widget.inputSize,
       );
 
       // Copy video from assets to temp

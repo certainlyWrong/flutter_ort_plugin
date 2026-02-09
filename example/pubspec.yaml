@@ -34,7 +34,5 @@ flutter:
   assets:
    - assets/
    - assets/mnist/
+   - assets/yolos/
    - assets/mnist/test_data_set_0/
-   - assets/yolo11.onnx
-   - assets/yolo11.ort
-   - assets/street.mp4
