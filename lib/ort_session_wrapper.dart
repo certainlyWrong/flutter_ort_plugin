@@ -5,6 +5,7 @@ import 'bindings/onnxruntime_generated.dart';
 import 'onnx_runtinme.dart';
 import 'ort_providers.dart';
 import 'ort_value_wrapper.dart';
+import 'session_config.dart';
 
 class OrtSessionWrapper {
   final OnnxRuntime _runtime;
@@ -33,12 +34,14 @@ class OrtSessionWrapper {
     String modelPath, {
     OnnxRuntime? runtime,
     Map<OrtProvider, Map<String, String>> providerOptions = const {},
+    SessionConfig sessionConfig = const SessionConfig(),
   }) {
     final rt = runtime ?? OnnxRuntime.instance;
     rt.ensureInitialized();
 
     final wrapper = OrtSessionWrapper._(rt);
     wrapper._sessionOptions = rt.createSessionOptions();
+    _applySessionConfig(rt, wrapper._sessionOptions, sessionConfig);
 
     final providers = OrtProviders(rt);
     providers.appendDefaultProviders(
@@ -69,12 +72,14 @@ class OrtSessionWrapper {
     required List<OrtProvider> providers,
     OnnxRuntime? runtime,
     Map<OrtProvider, Map<String, String>> providerOptions = const {},
+    SessionConfig sessionConfig = const SessionConfig(),
   }) {
     final rt = runtime ?? OnnxRuntime.instance;
     rt.ensureInitialized();
 
     final wrapper = OrtSessionWrapper._(rt);
     wrapper._sessionOptions = rt.createSessionOptions();
+    _applySessionConfig(rt, wrapper._sessionOptions, sessionConfig);
 
     final ortProviders = OrtProviders(rt);
     ortProviders.appendProviders(
@@ -96,8 +101,10 @@ class OrtSessionWrapper {
     String modelPath, {
     OnnxRuntime? runtime,
     required void Function(
-            OrtProviders providers, Pointer<OrtSessionOptions> options)
-        configure,
+      OrtProviders providers,
+      Pointer<OrtSessionOptions> options,
+    )
+    configure,
   }) {
     final rt = runtime ?? OnnxRuntime.instance;
     rt.ensureInitialized();
@@ -199,5 +206,20 @@ class OrtSessionWrapper {
     if (_disposed) {
       throw StateError('OrtSessionWrapper has already been disposed.');
     }
+  }
+
+  static void _applySessionConfig(
+    OnnxRuntime rt,
+    Pointer<OrtSessionOptions> options,
+    SessionConfig config,
+  ) {
+    if (config.intraOpThreads > 0) {
+      rt.setIntraOpNumThreads(options, config.intraOpThreads);
+    }
+    if (config.interOpThreads > 0) {
+      rt.setInterOpNumThreads(options, config.interOpThreads);
+    }
+    rt.setGraphOptimizationLevel(options, config.graphOptimizationLevel.value);
+    rt.setExecutionMode(options, config.executionMode.value);
   }
 }

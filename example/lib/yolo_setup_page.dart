@@ -50,38 +50,62 @@ class YoloModelInfo {
   // -----------------------------------------------------------------------
   static const List<YoloModelInfo> available = [
     YoloModelInfo(
-      assetPath: 'assets/yolos/yolo11.onnx',
-      name: 'YOLOv11',
+      assetPath: 'assets/yolos/yolo11n.onnx',
+      name: 'YOLO11n (FP16)',
       inputSize: 640,
       isOrt: false,
     ),
     YoloModelInfo(
-      assetPath: 'assets/yolos/yolo11.ort',
-      name: 'YOLOv11',
+      assetPath: 'assets/yolos/yolo11n.ort',
+      name: 'YOLO11n (FP16)',
       inputSize: 640,
       isOrt: true,
     ),
     YoloModelInfo(
-      assetPath: 'assets/yolos/yolo8n.onnx',
-      name: 'YOLOv8n (FP16)',
+      assetPath: 'assets/yolos/yolo11n_320.onnx',
+      name: 'YOLO11n (FP16) 320x320',
       inputSize: 320,
       isOrt: false,
     ),
     YoloModelInfo(
-      assetPath: 'assets/yolos/yolo8n.ort',
-      name: 'YOLOv8n (FP16)',
+      assetPath: 'assets/yolos/yolo11n_320.ort',
+      name: 'YOLO11n (FP16) 320x320',
       inputSize: 320,
       isOrt: true,
     ),
     YoloModelInfo(
-      assetPath: 'assets/yolos/yolo5n.onnx',
+      assetPath: 'assets/yolos/yolov8n.onnx',
+      name: 'YOLOv8n (FP16)',
+      inputSize: 640,
+      isOrt: false,
+    ),
+    YoloModelInfo(
+      assetPath: 'assets/yolos/yolov8n.ort',
+      name: 'YOLOv8n (FP16)',
+      inputSize: 640,
+      isOrt: true,
+    ),
+    YoloModelInfo(
+      assetPath: 'assets/yolos/yolov5n.onnx',
       name: 'YOLOv5n (FP16)',
+      inputSize: 640,
+      isOrt: false,
+    ),
+    YoloModelInfo(
+      assetPath: 'assets/yolos/yolov5n.ort',
+      name: 'YOLOv5n (FP16)',
+      inputSize: 640,
+      isOrt: true,
+    ),
+    YoloModelInfo(
+      assetPath: 'assets/yolos/yolov5n_320.onnx',
+      name: 'YOLOv5n (FP16) 320x320',
       inputSize: 320,
       isOrt: false,
     ),
     YoloModelInfo(
-      assetPath: 'assets/yolos/yolo5n.ort',
-      name: 'YOLO5n (FP16)',
+      assetPath: 'assets/yolos/yolov5n_320.ort',
+      name: 'YOLOv5n (FP16) 320x320',
       inputSize: 320,
       isOrt: true,
     ),
@@ -125,6 +149,12 @@ class _YoloSetupPageState extends State<YoloSetupPage> {
 
   // CoreML options (iOS)
   String _coremlComputeUnits = 'ALL';
+
+  // Session performance config
+  int _intraOpThreads = 4;
+  int _interOpThreads = 1;
+  GraphOptLevel _graphOptLevel = GraphOptLevel.all;
+  ExecutionMode _executionMode = ExecutionMode.sequential;
 
   @override
   void initState() {
@@ -226,6 +256,13 @@ class _YoloSetupPageState extends State<YoloSetupPage> {
         }
       }
 
+      final sessionConfig = SessionConfig(
+        intraOpThreads: _intraOpThreads,
+        interOpThreads: _interOpThreads,
+        graphOptimizationLevel: _graphOptLevel,
+        executionMode: _executionMode,
+      );
+
       Widget page;
       switch (_inputMode) {
         case InputMode.camera:
@@ -234,6 +271,7 @@ class _YoloSetupPageState extends State<YoloSetupPage> {
             providers: providers,
             providerOptions: providerOpts,
             inputSize: inputSize,
+            sessionConfig: sessionConfig,
           );
           break;
         case InputMode.image:
@@ -242,6 +280,7 @@ class _YoloSetupPageState extends State<YoloSetupPage> {
             providers: providers,
             providerOptions: providerOpts,
             inputSize: inputSize,
+            sessionConfig: sessionConfig,
           );
           break;
         case InputMode.video:
@@ -250,6 +289,7 @@ class _YoloSetupPageState extends State<YoloSetupPage> {
             providers: providers,
             providerOptions: providerOpts,
             inputSize: inputSize,
+            sessionConfig: sessionConfig,
           );
           break;
       }
@@ -717,6 +757,155 @@ class _YoloSetupPageState extends State<YoloSetupPage> {
 
           const SizedBox(height: 12),
 
+          // Performance tuning section
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Performance Tuning',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    _isAndroid
+                        ? 'On Big.LITTLE CPUs, fewer threads on big cores is faster than many threads across all cores.'
+                        : 'Adjust threading and optimization for your device.',
+                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Intra-op threads
+                  Text(
+                    'Intra-Op Threads: $_intraOpThreads',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    'Parallelism within a single operation (e.g. matrix multiply). 0 = ORT default.',
+                    style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                  ),
+                  Slider(
+                    value: _intraOpThreads.toDouble(),
+                    min: 0,
+                    max: Platform.numberOfProcessors.toDouble(),
+                    divisions: Platform.numberOfProcessors,
+                    label: _intraOpThreads == 0 ? 'Auto' : '$_intraOpThreads',
+                    onChanged: (v) =>
+                        setState(() => _intraOpThreads = v.round()),
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '0 (auto)',
+                        style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+                      ),
+                      Text(
+                        '${Platform.numberOfProcessors} cores',
+                        style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Inter-op threads
+                  Text(
+                    'Inter-Op Threads: $_interOpThreads',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    'Parallelism across independent nodes. Only used in Parallel execution mode. 0 = ORT default.',
+                    style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                  ),
+                  Slider(
+                    value: _interOpThreads.toDouble(),
+                    min: 0,
+                    max: Platform.numberOfProcessors.toDouble(),
+                    divisions: Platform.numberOfProcessors,
+                    label: _interOpThreads == 0 ? 'Auto' : '$_interOpThreads',
+                    onChanged: (v) =>
+                        setState(() => _interOpThreads = v.round()),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Graph optimization level
+                  Text(
+                    'Graph Optimization',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Higher levels apply more graph transformations (constant folding, node fusion, layout optimization).',
+                    style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: GraphOptLevel.values.map((level) {
+                      return ChoiceChip(
+                        label: Text(level.label),
+                        selected: _graphOptLevel == level,
+                        onSelected: (selected) {
+                          if (selected) {
+                            setState(() => _graphOptLevel = level);
+                          }
+                        },
+                      );
+                    }).toList(),
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Execution mode
+                  Text(
+                    'Execution Mode',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Sequential is usually better on mobile (lower overhead). Parallel may help on desktop.',
+                    style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: ExecutionMode.values.map((mode) {
+                      return ChoiceChip(
+                        label: Text(mode.label),
+                        selected: _executionMode == mode,
+                        onSelected: (selected) {
+                          if (selected) {
+                            setState(() => _executionMode = mode);
+                          }
+                        },
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
           // Summary
           Card(
             color: cs.primaryContainer.withValues(alpha: 0.3),
@@ -748,8 +937,13 @@ class _YoloSetupPageState extends State<YoloSetupPage> {
                               'cpu (fallback)',
                           ].join(', '),
                   ),
-                  if (_isAndroid) ...[
+                  if (_isAndroid &&
+                      (_useAutoProviders ||
+                          _selectedProviders.contains(OrtProvider.xnnpack)))
                     _SummaryRow('XNNPACK', '$_xnnpackThreads threads'),
+                  if (_isAndroid &&
+                      (_useAutoProviders ||
+                          _selectedProviders.contains(OrtProvider.nnapi)))
                     _SummaryRow(
                       'NNAPI',
                       [
@@ -764,8 +958,16 @@ class _YoloSetupPageState extends State<YoloSetupPage> {
                           'default flags',
                       ].join(', '),
                     ),
-                  ],
-                  if (_isIOS) _SummaryRow('CoreML', _coremlComputeUnits),
+                  if (_isIOS &&
+                      (_useAutoProviders ||
+                          _selectedProviders.contains(OrtProvider.coreML)))
+                    _SummaryRow('CoreML', _coremlComputeUnits),
+                  _SummaryRow(
+                    'Threads',
+                    'intra=$_intraOpThreads, inter=$_interOpThreads',
+                  ),
+                  _SummaryRow('Graph Opt', _graphOptLevel.label),
+                  _SummaryRow('Exec Mode', _executionMode.label),
                 ],
               ),
             ),

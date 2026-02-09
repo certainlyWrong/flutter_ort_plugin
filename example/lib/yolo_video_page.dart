@@ -16,6 +16,7 @@ class YoloVideoPage extends StatefulWidget {
   final List<OrtProvider>? providers;
   final Map<OrtProvider, Map<String, String>> providerOptions;
   final int inputSize;
+  final SessionConfig sessionConfig;
 
   const YoloVideoPage({
     super.key,
@@ -23,6 +24,7 @@ class YoloVideoPage extends StatefulWidget {
     this.providers,
     this.providerOptions = const {},
     this.inputSize = 640,
+    this.sessionConfig = const SessionConfig(),
   });
 
   @override
@@ -33,11 +35,10 @@ class _YoloVideoPageState extends State<YoloVideoPage> {
   final GlobalKey _videoBoundaryKey = GlobalKey();
   VideoPlayerController? _controller;
   YoloDetector? _detector;
-  Timer? _inferenceTimer;
+  bool _runInferenceLoop = false;
   bool _loading = true;
   String? _error;
   bool _isPlaying = false;
-  bool _isProcessing = false;
   List<Detection> _detections = [];
   double _confThreshold = 0.25;
   double _inferenceMs = 0;
@@ -58,6 +59,7 @@ class _YoloVideoPageState extends State<YoloVideoPage> {
         providers: widget.providers,
         providerOptions: widget.providerOptions,
         inputSize: widget.inputSize,
+        sessionConfig: widget.sessionConfig,
       );
 
       // Copy video from assets to temp
@@ -84,30 +86,32 @@ class _YoloVideoPageState extends State<YoloVideoPage> {
 
     if (_isPlaying) {
       _controller!.pause();
-      _inferenceTimer?.cancel();
-      _inferenceTimer = null;
+      _runInferenceLoop = false;
     } else {
       _controller!.play();
-      // Capture a frame every ~200ms for inference
-      _inferenceTimer = Timer.periodic(
-        const Duration(milliseconds: 200),
-        (_) => _captureAndDetect(),
-      );
+      _runInferenceLoop = true;
+      _inferenceLoop();
     }
 
     setState(() => _isPlaying = !_isPlaying);
   }
 
+  Future<void> _inferenceLoop() async {
+    while (_runInferenceLoop && mounted) {
+      await _captureAndDetect();
+      // Small delay to let the video player render the next frame
+      await Future.delayed(const Duration(milliseconds: 30));
+    }
+  }
+
   Future<void> _captureAndDetect() async {
-    if (_isProcessing || _detector == null || !mounted) return;
-    _isProcessing = true;
+    if (_detector == null || !mounted) return;
 
     try {
       final boundary =
           _videoBoundaryKey.currentContext?.findRenderObject()
               as RenderRepaintBoundary?;
       if (boundary == null || !boundary.hasSize) {
-        _isProcessing = false;
         return;
       }
 
@@ -119,7 +123,6 @@ class _YoloVideoPageState extends State<YoloVideoPage> {
       uiImage.dispose();
 
       if (byteData == null) {
-        _isProcessing = false;
         return;
       }
 
@@ -167,14 +170,12 @@ class _YoloVideoPageState extends State<YoloVideoPage> {
       }
     } catch (e) {
       debugPrint('Frame capture error: $e');
-    } finally {
-      _isProcessing = false;
     }
   }
 
   @override
   void dispose() {
-    _inferenceTimer?.cancel();
+    _runInferenceLoop = false;
     _controller?.dispose();
     _detector?.dispose();
     super.dispose();

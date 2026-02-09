@@ -136,6 +136,7 @@ class YoloDetector {
     List<OrtProvider>? providers,
     Map<OrtProvider, Map<String, String>> providerOptions = const {},
     int inputSize = 640,
+    SessionConfig sessionConfig = const SessionConfig(),
   }) {
     final runtime = OnnxRuntime.instance;
     final session = providers != null
@@ -143,8 +144,13 @@ class YoloDetector {
             modelPath,
             providers: providers,
             providerOptions: providerOptions,
+            sessionConfig: sessionConfig,
           )
-        : OrtSessionWrapper.create(modelPath, providerOptions: providerOptions);
+        : OrtSessionWrapper.create(
+            modelPath,
+            providerOptions: providerOptions,
+            sessionConfig: sessionConfig,
+          );
     return YoloDetector._(session, runtime, inputSize);
   }
 
