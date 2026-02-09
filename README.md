@@ -1,8 +1,16 @@
 # flutter_ort_plugin
 
-Flutter plugin for [ONNX Runtime](https://onnxruntime.ai/) inference via Dart FFI. Load `.onnx` models and run them natively on Android, iOS, macOS, Linux, and Windows.
+Flutter plugin for [ONNX Runtime](https://onnxruntime.ai/) inference via Dart FFI. Load `.onnx` models and run them natively on Android, iOS, and Linux.
 
 ONNX Runtime version: **1.24.1**
+
+## Platform Support
+
+| Platform    | Minimum Version      | Execution Providers         | Status          |
+| ----------- | -------------------- | --------------------------- | --------------- |
+| **Android** | API 24 (Android 7.0) | WebGPU, NNAPI, XNNPACK, CPU | ✅ Full support |
+| **iOS**     | iOS 15.1             | CoreML, CPU                 | ✅ Full support |
+| **Linux**   | Any                  | CPU only                    | ✅ CPU support  |
 
 ## Installation
 
@@ -102,24 +110,22 @@ await session.dispose();
 
 The plugin auto-detects the best provider per platform:
 
-| Platform      | Default providers   | Supported   | Notes                                        |
-| ------------- | ------------------- | ----------- | -------------------------------------------- |
-| iOS/macOS     | CoreML, CPU         | ✅ Fully    | CoreML via dedicated config                  |
-| Android       | XNNPACK, NNAPI, CPU | ✅ Fully    | NNAPI with flags, XNNPACK with thread config |
-| Linux/Windows | CPU                 | ✅ CPU only | GPU providers via generic API only           |
+| Platform | Default providers           | Supported   | Notes                                         |
+| -------- | --------------------------- | ----------- | --------------------------------------------- |
+| iOS      | CoreML, CPU                 | ✅ Fully    | CoreML via dedicated config                   |
+| Android  | WebGPU, NNAPI, XNNPACK, CPU | ✅ Fully    | WebGPU via Dawn, NNAPI flags, XNNPACK threads |
+| Linux    | CPU                         | ✅ CPU only | CPU execution provider                        |
 
 ### Provider Implementation Status
 
-| Provider   | Status          | Notes                                            |
-| ---------- | --------------- | ------------------------------------------------ |
-| CPU        | ✅ Ready        | Always available, built-in                       |
-| CoreML     | ✅ Ready        | iOS/macOS acceleration                           |
-| NNAPI      | ✅ Ready        | Android NPU/GPU with FP16/NCHW flags             |
-| XNNPACK    | ✅ Ready        | Android CPU SIMD optimization with thread config |
-| QNN        | ⚠️ Generic only | Qualcomm - not fully implemented                 |
-| CUDA       | ⚠️ Generic only | NVIDIA - not fully implemented                   |
-| TensorRT   | ⚠️ Generic only | NVIDIA - not fully implemented                   |
-| All others | ⚠️ Generic only | May work via generic API                         |
+| Provider | Status          | Platform | Notes                                     |
+| -------- | --------------- | -------- | ----------------------------------------- |
+| CPU      | ✅ Ready        | All      | Always available, built-in                |
+| CoreML   | ✅ Ready        | iOS      | Apple Neural Engine/GPU acceleration      |
+| WebGPU   | ✅ Ready        | Android  | GPU acceleration via Dawn/WebGPU support  |
+| NNAPI    | ✅ Ready        | Android  | NPU/GPU with FP16/NCHW/CPU-disabled flags |
+| XNNPACK  | ✅ Ready        | Android  | CPU SIMD optimization with thread config  |
+| QNN      | ⚠️ Generic only | Android  | Qualcomm NPU via generic API              |
 
 ### Automatic (default)
 
@@ -175,16 +181,69 @@ final session = OrtSessionWrapper.createWithProviders(
 );
 ```
 
+### WebGPU (Android GPU acceleration)
+
+WebGPU provides hardware-accelerated inference on Android devices with GPU support:
+
+```dart
+final session = OrtSessionWrapper.createWithProviders(
+  'model.onnx',
+  providers: [OrtProvider.webGpu, OrtProvider.cpu],
+  providerOptions: {
+    // WebGPU options can be added here if needed
+    OrtProvider.webGpu: {},
+  },
+);
+```
+
 ### Querying available providers
 
 ```dart
 final providers = OrtProviders(OnnxRuntime.instance);
 
 providers.getAvailableProviders();
-// ['CoreMLExecutionProvider', 'CPUExecutionProvider']
+// ['WebGpuExecutionProvider', 'NnapiExecutionProvider', 'CPUExecutionProvider']
 
-providers.isProviderAvailable(OrtProvider.coreML); // true
+providers.isProviderAvailable(OrtProvider.webGpu); // true
 ```
+
+## Performance Tuning
+
+Fine-tune session options for optimal performance on your target device:
+
+```dart
+import 'package:flutter_ort_plugin/flutter_ort_plugin.dart';
+
+final session = OrtSessionWrapper.create(
+  'model.onnx',
+  sessionConfig: SessionConfig(
+    intraOpThreads: 4,                    // Threads within ops (0 = ORT default)
+    interOpThreads: 1,                    // Threads across ops (0 = ORT default)
+    graphOptimizationLevel: GraphOptLevel.all, // Max graph optimizations
+    executionMode: ExecutionMode.sequential,    // Better on mobile
+  ),
+);
+```
+
+### Android Big.LITTLE Optimization
+
+For Android devices with heterogeneous cores, limit intra-op threads to avoid contention:
+
+```dart
+final session = OrtSessionWrapper.create(
+  'model.onnx',
+  sessionConfig: SessionConfig.androidOptimized, // Pre-configured for Android
+);
+```
+
+### Available Options
+
+| Option                   | Values                              | Description                           |
+| ------------------------ | ----------------------------------- | ------------------------------------- |
+| `intraOpThreads`         | `0` (auto) or integer               | Parallelism within a single operation |
+| `interOpThreads`         | `0` (auto) or integer               | Parallelism across independent nodes  |
+| `graphOptimizationLevel` | `disabled`/`basic`/`extended`/`all` | Graph transformation aggressiveness   |
+| `executionMode`          | `sequential`/`parallel`             | Node execution order                  |
 
 ## API Overview
 
@@ -260,12 +319,22 @@ rt.releaseSessionOptions(options);
 
 ## Example
 
-The `example/` app demonstrates the high-level API using MNIST and is split into multiple pages:
+The `example/` app demonstrates real-world computer vision inference with YOLO models and includes comprehensive performance tuning:
 
-- **Basic Inference**: load session + run inference
-- **Execution Providers**: query/select providers
-- **Isolate vs Sync**: visual UI-freeze comparison
-- **Benchmark**: run N inferences and inspect statistics
+- **YOLO Setup**: Model selection, provider configuration, and performance tuning UI
+- **Camera Detection**: Real-time YOLO inference on camera feed with FPS/inference stats
+- **Image Detection**: Static image inference with bounding box overlay
+- **Video Detection**: Frame-by-frame inference on video with detection overlay
+- **Performance Tuning**: Configure threading, graph optimization, and execution mode
+- **Execution Providers**: Test different providers (WebGPU, NNAPI, XNNPACK, CoreML)
+
+Features demonstrated:
+
+- Dynamic model loading (.onnx/.ort formats)
+- Platform-aware provider selection (WebGPU/NNAPI/XNNPACK on Android, CoreML on iOS)
+- Session configuration for Android Big.LITTLE optimization
+- Provider-specific options (NNAPI flags, XNNPACK threads, CoreML compute units)
+- Background isolate inference to prevent UI freezes
 
 ```bash
 cd example
@@ -277,6 +346,26 @@ flutter run
 ```bash
 dart run ffigen --config ffigen.yaml
 ```
+
+## Recent Changes
+
+### v1.0.3+
+
+- **WebGPU Support**: Added WebGPU execution provider for Android GPU acceleration
+- **Session Configuration**: New `SessionConfig` class for fine-tuning performance
+  - Intra-op/inter-op thread control
+  - Graph optimization levels (disabled → all)
+  - Execution modes (sequential/parallel)
+  - Android Big.LITTLE optimization preset
+- **Performance Tuning UI**: Example app now includes comprehensive tuning controls
+- **Video Detection**: Fixed playback stuttering with self-scheduling inference loop
+- **Provider Summary**: Fixed provider options display to respect manual selection
+
+### Provider Priority Updates
+
+- Android now prioritizes GPU providers: WebGPU → NNAPI → XNNPACK → CPU
+- iOS: CoreML → CPU
+- Linux: CPU only
 
 ## License
 
