@@ -62,14 +62,26 @@ class YoloModelInfo {
       isOrt: true,
     ),
     YoloModelInfo(
-      assetPath: 'assets/yolos/yolov8n_320.onnx',
+      assetPath: 'assets/yolos/yolo8n.onnx',
       name: 'YOLOv8n (FP16)',
       inputSize: 320,
       isOrt: false,
     ),
     YoloModelInfo(
-      assetPath: 'assets/yolos/yolov8n_320.ort',
+      assetPath: 'assets/yolos/yolo8n.ort',
       name: 'YOLOv8n (FP16)',
+      inputSize: 320,
+      isOrt: true,
+    ),
+    YoloModelInfo(
+      assetPath: 'assets/yolos/yolo5n.onnx',
+      name: 'YOLOv5n (FP16)',
+      inputSize: 320,
+      isOrt: false,
+    ),
+    YoloModelInfo(
+      assetPath: 'assets/yolos/yolo5n.ort',
+      name: 'YOLO5n (FP16)',
       inputSize: 320,
       isOrt: true,
     ),
