@@ -1263,6 +1263,7 @@ final class OrtTensorRTProviderOptions extends ffi.Struct {
 
 final class OrtCustomHandleType extends ffi.Struct {
   @ffi.Char()
+  // ignore: unused_field
   external int __place_holder;
 }
 
