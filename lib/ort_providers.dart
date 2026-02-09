@@ -18,6 +18,7 @@ import 'xnnpack_options.dart';
 /// - [xnnpack] — Android with thread configuration
 ///
 /// ⚠️ **Generic API Only** (may work but no dedicated support):
+/// - [webGpu] — WebGPU via Dawn (Android GPU)
 /// - [qnn] — Qualcomm Neural Network (placeholder)
 /// - [cuda] — NVIDIA CUDA (placeholder)
 /// - [tensorRT] — NVIDIA TensorRT (placeholder)
@@ -59,7 +60,11 @@ enum OrtProvider {
 
   /// XNNPACK execution provider for optimized CPU inference.
   /// Uses NEON SIMD on ARM. Fully implemented with thread configuration.
-  xnnpack('XNNPACKExecutionProvider');
+  xnnpack('XNNPACKExecutionProvider'),
+
+  /// WebGPU execution provider for GPU-accelerated inference.
+  /// Available on Android when compiled with Dawn/WebGPU support.
+  webGpu('WebGpuExecutionProvider');
 
   final String ortName;
   const OrtProvider(this.ortName);
@@ -121,6 +126,12 @@ class OrtProviders {
             available.contains('NNAPIExecutionProvider'))) {
       return true;
     }
+    // WebGPU pode aparecer com variações de case
+    if (provider == OrtProvider.webGpu &&
+        (available.contains('WebGpuExecutionProvider') ||
+            available.contains('WebGPUExecutionProvider'))) {
+      return true;
+    }
     return false;
   }
 
@@ -138,13 +149,19 @@ class OrtProviders {
 
     if (Platform.isAndroid) {
       final providers = <OrtProvider>[];
-      if (available.contains('XnnpackExecutionProvider') ||
-          available.contains('XNNPACKExecutionProvider')) {
-        providers.add(OrtProvider.xnnpack);
+      // GPU providers first (higher priority)
+      if (available.contains('WebGpuExecutionProvider') ||
+          available.contains('WebGPUExecutionProvider')) {
+        providers.add(OrtProvider.webGpu);
       }
       if (available.contains('NnapiExecutionProvider') ||
           available.contains('NNAPIExecutionProvider')) {
         providers.add(OrtProvider.nnapi);
+      }
+      // CPU-optimized providers
+      if (available.contains('XnnpackExecutionProvider') ||
+          available.contains('XNNPACKExecutionProvider')) {
+        providers.add(OrtProvider.xnnpack);
       }
       if (available.contains(OrtProvider.qnn.ortName)) {
         providers.add(OrtProvider.qnn);
@@ -215,6 +232,12 @@ class OrtProviders {
         _appendViaGenericApi(options, 'QNN', providerOptions: providerOptions);
       case OrtProvider.xnnpack:
         _appendXnnpack(options, providerOptions: providerOptions);
+      case OrtProvider.webGpu:
+        _appendViaGenericApi(
+          options,
+          'WebGPU',
+          providerOptions: providerOptions,
+        );
     }
   }
 
