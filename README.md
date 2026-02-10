@@ -43,6 +43,63 @@ If you run into linking/symbol issues when using `DynamicLibrary.process()` on i
 - **Runtime**: `onnxruntime-android` **1.24.1** (pulled via Gradle by the plugin)
 - **NDK**: required to build the plugin FFI target (see the NDK version configured in the plugin)
 
+#### ONNX Runtime Build Strategies
+
+The plugin supports two different ONNX Runtime builds for Android:
+
+| Strategy      | Description                                    | Size    | When to Use                            |
+| ------------- | ---------------------------------------------- | ------- | -------------------------------------- |
+| **Standard**  | Basic CPU execution only                       | Smaller | Simple models, CPU-only inference      |
+| **Providers** | Full provider support (WebGPU, NNAPI, XNNPACK) | Larger  | Performance-critical apps with GPU/NPU |
+
+#### Building with Custom Strategy
+
+By default, the plugin uses the **standard** build. To use the **providers** build with WebGPU/NNAPI/XNNPACK support:
+
+```bash
+# Build with providers (includes WebGPU, NNAPI, XNNPACK)
+flutter build apk --android-project-arg=ORT_STRATEGY=providers
+
+# Or for App Bundle
+flutter build appbundle --android-project-arg=ORT_STRATEGY=providers
+
+# For debug builds
+flutter build apk --debug --android-project-arg=ORT_STRATEGY=providers
+```
+
+#### Provider Requirements
+
+- **WebGPU**: Requires Android device with GPU support and Vulkan drivers
+- **NNAPI**: Requires Android API 27+ for best compatibility
+- **XNNPACK**: Works on all ARM devices (NEON SIMD)
+
+The providers build is larger but enables hardware acceleration. Use the standard build for smaller app size or if you only need CPU inference.
+
+#### Performance Considerations
+
+**CPU vs Providers**: Many models actually perform better with CPU inference than with hardware providers, especially:
+
+- Small to medium-sized models (<50MB)
+- Models with many small operations
+- Models not optimized for mobile GPUs/NPUs
+- First-generation inference (warm-up overhead on providers)
+
+**Recommendation**: Always test both strategies with your specific model:
+
+```bash
+# Test standard CPU build
+flutter build apk --debug
+# Run benchmarks with your model
+
+# Test providers build
+flutter build apk --debug --android-project-arg=ORT_STRATEGY=providers
+# Run benchmarks with your model
+
+# Compare inference latency and accuracy
+```
+
+The providers build shines with large models (>100MB) and operations well-suited for parallel GPU execution, but don't assume it's always faster.
+
 ## Quick Start
 
 ```dart
@@ -115,6 +172,8 @@ The plugin auto-detects the best provider per platform:
 | iOS      | CoreML, CPU                 | ✅ Fully    | CoreML via dedicated config                   |
 | Android  | WebGPU, NNAPI, XNNPACK, CPU | ✅ Fully    | WebGPU via Dawn, NNAPI flags, XNNPACK threads |
 | Linux    | CPU                         | ✅ CPU only | CPU execution provider                        |
+
+> **Note**: Android providers (WebGPU, NNAPI, XNNPACK) require building with `--android-project-arg=ORT_STRATEGY=providers`. See Android setup section for details.
 
 ### Provider Implementation Status
 

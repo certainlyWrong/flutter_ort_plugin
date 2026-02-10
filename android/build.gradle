@@ -1,54 +1,89 @@
-// The Android Gradle Plugin builds the native code with the Android NDK.
+import java.nio.file.Files
+import java.nio.file.Paths
 
 group = "com.example.flutter_ort_plugin"
 version = "1.0"
 
-buildscript {
-    repositories {
-        google()
-        mavenCentral()
-    }
-
-    dependencies {
-        // The Android Gradle Plugin knows how to build native code with the NDK.
-        classpath("com.android.tools.build:gradle:8.11.1")
-    }
-}
-
-rootProject.allprojects {
-    repositories {
-        google()
-        mavenCentral()
-    }
-}
-
 apply plugin: "com.android.library"
+
+
+// --- ONNX RUNTIME DOWNLOAD CONFIGURATION ---
+def ortConfigs = [
+    "standard": [
+        "url": "https://github.com/certainlyWrong/flutter_ort_plugin/releases/download/v1.0.0/jniLibs.zip",
+        "label": "STANDARD"
+    ],
+    "providers": [
+        "url": "https://github.com/certainlyWrong/flutter_ort_plugin/releases/download/v1.0.0/jniLibs_providers.zip",
+        "label": "WITH_PROVIDERS"
+    ]
+]
+
+/**
+ * Determine strategy: 
+ * Check for project property ORT_STRATEGY (e.g., ./gradlew -PORT_STRATEGY=providers)
+ * Default to "standard" if not specified.
+ */
+def selectedStrategy = project.hasProperty("ORT_STRATEGY") ? project.getProperty("ORT_STRATEGY") : "standard"
+def config = ortConfigs[selectedStrategy] ?: ortConfigs["standard"]
+
+def downloadDest = "${project.buildDir}/onnx_libs_${selectedStrategy}.zip"
+def jniLibsDir = "${project.projectDir}/src/main/jniLibs"
+
+task downloadOnnxRuntimeCustom(type: Task) {
+    description = "Downloads and extracts the required ONNX Runtime binaries based on the selected strategy."
+    
+    doFirst {
+        // Marker file to track the current strategy and prevent redundant downloads
+        def markerFile = new File(jniLibsDir, "strategy_${selectedStrategy}.marker")
+        
+        if (!markerFile.exists()) {
+            println "🚀 [flutter_ort_plugin] Starting download: ONNX Runtime [Strategy: ${config.label}]"
+            println "🔗 [flutter_ort_plugin] Source: ${config.url}"
+            
+            // Clean up old binaries to prevent conflicts between different strategies
+            delete jniLibsDir
+            if (!project.buildDir.exists()) mkdir project.buildDir
+            
+            try {
+                ant.get(src: config.url, dest: downloadDest, skipexisting: false)
+                
+                println "📦 [flutter_ort_plugin] Extracting binaries to jniLibs folder..."
+                copy {
+                    from zipTree(downloadDest)
+                    into "${project.projectDir}/src/main/"
+                }
+                
+                // Create strategy marker
+                markerFile.text = "strategy=${selectedStrategy}\nlabel=${config.label}\nbuild_date=${new Date().toString()}"
+                
+                println "✅ [flutter_ort_plugin] Success: ${config.label} binaries are ready."
+            } catch (Exception e) {
+                throw GradleException("❌ [flutter_ort_plugin] Failed to download ONNX Runtime binaries. Please check your internet connection. Error: ${e.message}")
+            }
+        } else {
+            println "ℹ️ [flutter_ort_plugin] ONNX Runtime ${config.label} is already installed. Skipping download."
+        }
+    }
+}
+
+// Ensure the download task is executed before the native build process
+project.afterEvaluate {
+    if (tasks.findByName("preBuild")) {
+        tasks.named("preBuild").configure {
+            dependsOn downloadOnnxRuntimeCustom
+        }
+    }
+}
 
 android {
     namespace = "com.example.flutter_ort_plugin"
-
-    // Bumping the plugin compileSdk version requires all clients of this plugin
-    // to bump the version in their app.
     compileSdk = 36
-
-    // Use the NDK version
-    // declared in /android/app/build.gradle file of the Flutter project.
-    // Replace it with a version number if this plugin requires a specific NDK version.
-    // (e.g. ndkVersion "23.1.7779620")
     ndkVersion = "27.0.12077973"
 
-    // Invoke the shared CMake build with the Android Gradle Plugin.
     externalNativeBuild {
         cmake {
             path = "../src/CMakeLists.txt"
-
-            // The default CMake version for the Android Gradle Plugin is 3.10.2.
-            // https://developer.android.com/studio/projects/install-ndk#vanilla_cmake
-            //
-            // The Flutter tooling requires that developers have CMake 3.10 or later
-            // installed. You should not increase this version, as doing so will cause
-            // the plugin to fail to compile for some customers of the plugin.
-            // version "3.10.2"
         }
     }
 
@@ -57,12 +92,20 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 
-    dependencies {
-        // Isso baixa o AAR automaticamente do Maven Central
-        // implementation 'com.microsoft.onnxruntime:onnxruntime:1.24.1'
-    }
-
     defaultConfig {
         minSdk = 24
+        
+        // Importante para o CMake encontrar a lib que você baixou
+        externalNativeBuild {
+            cmake {
+                arguments "-DANDROID_STL=c++_shared"
+            }
+        }
+    }
+
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['src/main/jniLibs']
+        }
     }
 }
