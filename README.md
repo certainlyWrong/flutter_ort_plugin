@@ -40,7 +40,7 @@ If you run into linking/symbol issues when using `DynamicLibrary.process()` on i
 ### Android
 
 - **Minimum SDK**: Android **24** (`minSdk 24`)
-- **Runtime**: `onnxruntime-android` **1.24.1** (pulled via Gradle by the plugin)
+- **Runtime**: Custom-compiled ONNX Runtime **1.24.1** from official repository (includes WebGPU/NNAPI/XNNPACK providers)
 - **NDK**: required to build the plugin FFI target (see the NDK version configured in the plugin)
 
 #### ONNX Runtime Build Strategies

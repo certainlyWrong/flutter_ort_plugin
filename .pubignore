@@ -1,0 +1,50 @@
+example/
+
+# Exclude ONNX Runtime source headers (too large for pub.dev)
+include/
+src/
+
+# Exclude build artifacts
+build/
+.dart_tool/
+.packages/
+.pub-cache/
+.pub/
+
+# Exclude example app
+example/
+
+# Exclude development files
+.git/
+.gitignore
+.metadata
+.flutter-plugins
+.flutter-plugins-dependencies
+.flutter-tools
+
+# Exclude IDE files
+.vscode/
+.idea/
+*.iml
+*.swp
+*.swo
+
+# Exclude OS files
+.DS_Store
+Thumbs.db
+
+# Exclude scripts and tools
+scripts/
+ffigen.yaml
+
+# Exclude documentation (README is included automatically)
+docs/
+
+# Exclude test files
+test/
+
+# Exclude analysis options (not needed for consumers)
+analysis_options.yaml
+
+# Exclude lock files
+pubspec.lock
