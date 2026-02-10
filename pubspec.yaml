@@ -1,6 +1,6 @@
 name: flutter_ort_plugin
 description: "High-performance ONNX Runtime plugin with WebGPU support for Flutter. Run ML models on Android, iOS, and Linux with optimized execution providers."
-version: 0.0.1
+version: 1.0.1
 repository: https://github.com/adrinator/flutter_ort_plugin
 homepage: https://github.com/adrinator/flutter_ort_plugin
 
